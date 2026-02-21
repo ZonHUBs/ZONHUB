@@ -11,7 +11,7 @@ pcall(function() if getgenv().zonIndexUI then getgenv().zonIndexUI:Destroy() end
 
 -- [[ SETUP UI UTAMA ]] --
 local ScreenGui = Instance.new("ScreenGui"); ScreenGui.Name = "ZonHubIndex"; pcall(function() ScreenGui.Parent = CoreGui end); if not ScreenGui.Parent then ScreenGui.Parent = LP.PlayerGui end; ScreenGui.ResetOnSpawn = false; getgenv().ZonIndexUI = ScreenGui 
-local Theme = { Bg = Color3.fromRGB(20, 20, 20), Header = Color3.fromRGB(15, 15, 15), Item = Color3.fromRGB(40, 40, 40), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255), TabBg = Color3.fromRGB(25, 25, 25) }
+local Theme = { Bg = Color3.fromRGB(15, 18, 16), Header = Color3.fromRGB(10, 14, 12), Item = Color3.fromRGB(30, 40, 35), Text = Color3.fromRGB(220, 255, 230), Purple = Color3.fromRGB(60, 200, 120), TabBg = Color3.fromRGB(18, 26, 22) }
 
 local ZONBtn = Instance.new("TextButton", ScreenGui); ZONBtn.BackgroundColor3 = Theme.Purple; ZONBtn.Position = UDim2.new(0.1, 0, 0.1, 0); ZONBtn.Size = UDim2.new(0, 50, 0, 50); ZONBtn.Text = "ZON"; ZONBtn.TextColor3 = Color3.new(1,1,1); ZONBtn.Font = Enum.Font.GothamBlack; ZONBtn.TextSize = 22; ZONBtn.Visible = false; Instance.new("UICorner", ZONBtn).CornerRadius = UDim.new(1, 0)
 
@@ -85,6 +85,6 @@ local function CreateAutoLoadTab(TabName, DescText, LoadLink)
     table.insert(Tabs, TBtn); table.insert(Pages, Page); return Page, TBtn
 end
 
-CreateAutoLoadTab("Pabrik", "Memuat otomatis sistem Pabrik.", "https://raw.githubusercontent.com/Koziz/CAW-SCRIPT/refs/heads/main/Pabrik.lua")
+CreateAutoLoadTab("Pabrik", "Memuat otomatis sistem Pabrik.", "https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/pabrik.lua")
 CreateAutoLoadTab("Auto Farm", "Sistem farming resource (Kayu, Batu).", "https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/autofarm.lua")
 CreateAutoLoadTab("Manager", "Sistem Inventory & Sortir Barang.", "https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/manager.lua")
