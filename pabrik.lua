@@ -31,7 +31,7 @@ getgenv().GrowthTime = 30
 getgenv().BreakPosX = 0; getgenv().BreakPosY = 0
 getgenv().DropPosX = 0; getgenv().DropPosY = 0
 
-getgenv().BlockThreshold = 20 
+getgenv().BlockThreshold = 0 
 getgenv().KeepSeedAmt = 20    
 
 getgenv().SelectedSeed = ""; getgenv().SelectedBlock = "" 
