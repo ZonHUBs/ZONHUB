@@ -1,148 +1,104 @@
--- [[ ZONHUB - AUTO CHAT MODULE (GHOST TYPE SMOOTH) ]] --
-local TargetPage = ...
-if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
-
-getgenv().ScriptVersion = "AutoChat v20.1 - Ghost Smooth (All Chat Systems)"
-
 -- ========================================== --
--- SERVICES
+-- SMART SEND v2 (Queue + Backoff + Re-resolve)
 -- ========================================== --
-getgenv().AutoChatEnabled = false
-local VIM = game:GetService("VirtualInputManager")
-local UIS = game:GetService("UserInputService")
-local Players = game:GetService("Players")
+
 local TextChatService = game:GetService("TextChatService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LP = Players.LocalPlayer
 
--- ========================================== --
--- FUNGSI UI UTILITY
--- ========================================== --
-local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
+local ChatSender = {
+    Queue = {},
+    Sending = false,
+    MinDelay = 2,        -- delay minimum aman
+    MaxDelay = 25,       -- batas backoff
+    Backoff = 0,         -- tambahan delay dinamis saat gagal
+    LastSendAt = 0,
+    Debug = true,
+}
 
-local function CreateToggle(Parent, Text, Var)
-    local Btn = Instance.new("TextButton", Parent)
-    Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = ""; Btn.AutoButtonColor = false
-    local C = Instance.new("UICorner", Btn); C.CornerRadius = UDim.new(0, 6)
-    local T = Instance.new("TextLabel", Btn)
-    T.Text = Text; T.TextColor3 = Theme.Text; T.Font = Enum.Font.GothamSemibold; T.TextSize = 12; T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0); T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left
-    local IndBg = Instance.new("Frame", Btn)
-    IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30)
-    local IC = Instance.new("UICorner", IndBg); IC.CornerRadius = UDim.new(1,0)
-    local Dot = Instance.new("Frame", IndBg)
-    Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100)
-    local DC = Instance.new("UICorner", Dot); DC.CornerRadius = UDim.new(1,0)
-
-    Btn.MouseButton1Click:Connect(function()
-        getgenv()[Var] = not getgenv()[Var]
-        if getgenv()[Var] then
-            Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true)
-            Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple
-        else
-            Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true)
-            Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30)
-        end
-    end)
-end
-
-local function CreateTextBox(Parent, Text, Default, IsNumber)
-    local Frame = Instance.new("Frame", Parent)
-    Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35)
-    local C = Instance.new("UICorner", Frame); C.CornerRadius = UDim.new(0, 6)
-    local Label = Instance.new("TextLabel", Frame)
-    Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.45, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left
-    local InputBox = Instance.new("TextBox", Frame)
-    InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); InputBox.Position = UDim2.new(0.5, 0, 0.15, 0); InputBox.Size = UDim2.new(0.45, 0, 0.7, 0); InputBox.Font = Enum.Font.GothamSemibold; InputBox.TextSize = 11; InputBox.TextColor3 = Theme.Text; InputBox.Text = tostring(Default); InputBox.ClearTextOnFocus = false; InputBox.TextXAlignment = Enum.TextXAlignment.Center
-    local IC = Instance.new("UICorner", InputBox); IC.CornerRadius = UDim.new(0, 4)
-    if IsNumber then
-        InputBox.FocusLost:Connect(function()
-            if not tonumber(InputBox.Text) then InputBox.Text = tostring(Default) end
-        end)
+local function dprint(...)
+    if ChatSender.Debug then
+        warn("[AutoChat]", ...)
     end
-    return InputBox
 end
 
--- ========================================== --
--- BUILD MENU
--- ========================================== --
-CreateToggle(TargetPage, "Start Auto Chat", "AutoChatEnabled")
-getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "ZonHub On Top!", false)
-getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
+local function WaitChatReady(timeout)
+    local t0 = os.clock()
+    while (os.clock() - t0) < (timeout or 8) do
+        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+            local channels = TextChatService:FindFirstChild("TextChannels")
+            if channels and channels:FindFirstChildWhichIsA("TextChannel") then
+                return true
+            end
+        else
+            local events = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+            if events and events:FindFirstChild("SayMessageRequest") then
+                return true
+            end
+        end
+        task.wait(0.2)
+    end
+    return false
+end
 
--- ========================================== --
--- GHOST TYPING (FIXED TIMING)
--- ========================================== --
-local function GhostTypeSmooth(msg)
-    pcall(function()
-        VIM:SendKeyEvent(true, Enum.KeyCode.Slash, false, game)
-        VIM:SendKeyEvent(false, Enum.KeyCode.Slash, false, game)
+local function ResolveTextChannel()
+    -- selalu resolve ulang (biar aman setelah pindah world / rame)
+    if TextChatService.ChatVersion ~= Enum.ChatVersion.TextChatService then
+        return nil
+    end
 
-        local box
-        local start = os.clock()
-        repeat
-            box = UIS:GetFocusedTextBox()
-            task.wait(0.05)
-        until box or (os.clock() - start) > 5
+    local channel = nil
 
-        if box then
-            box.Text = msg
-            task.wait(0.03)
-            VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-            VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+    local ok = pcall(function()
+        if TextChatService.ChatInputBarConfiguration then
+            channel = TextChatService.ChatInputBarConfiguration.TargetTextChannel
         end
     end)
+
+    if not ok then channel = nil end
+
+    if not channel then
+        local channels = TextChatService:FindFirstChild("TextChannels")
+        if channels then
+            channel = channels:FindFirstChild("RBXGeneral") or channels:FindFirstChildWhichIsA("TextChannel")
+        end
+    end
+
+    return channel
 end
 
--- ========================================== --
--- SMART SEND (WORKS ON TextChatService + Legacy)
--- ========================================== --
-local function SendChatSmart(msg)
+local function TrySendOnce(msg)
     msg = tostring(msg or "")
     if msg == "" then return false, "Pesan kosong" end
 
+    -- Pastikan chat sudah siap (sering kejadian pas masuk world rame)
+    if not WaitChatReady(6) then
+        return false, "Chat belum ready"
+    end
+
     -- 1) TextChatService (chat baru)
-    do
-        local ok, sent, err = pcall(function()
-            if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-                local channel = nil
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        local channel = ResolveTextChannel()
+        if not channel then
+            return false, "TextChannel tidak ketemu"
+        end
 
-                -- Target channel kalau sudah diset oleh input bar
-                if TextChatService.ChatInputBarConfiguration then
-                    channel = TextChatService.ChatInputBarConfiguration.TargetTextChannel
-                end
-
-                -- Fallback cari channel umum
-                if not channel then
-                    local channels = TextChatService:FindFirstChild("TextChannels") or TextChatService:WaitForChild("TextChannels", 2)
-                    if channels then
-                        channel = channels:FindFirstChild("RBXGeneral") or channels:FindFirstChildWhichIsA("TextChannel")
-                    end
-                end
-
-                if not channel then
-                    return false, "TextChannel tidak ketemu"
-                end
-
-                channel:SendAsync(msg)
-                return true
-            end
-
-            return nil -- bukan TextChatService
+        local ok, err = pcall(function()
+            channel:SendAsync(msg)
         end)
 
-        if ok and sent ~= nil then
-            return sent, err
+        if ok then
+            return true
+        else
+            return false, tostring(err)
         end
     end
 
-    -- 2) Legacy chat (DefaultChatSystem)
-    do
-        local events = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
-        local say = events and events:FindFirstChild("SayMessageRequest")
-        if say then
-            say:FireServer(msg, "All")
-            return true
-        end
+    -- 2) Legacy chat
+    local events = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+    local say = events and events:FindFirstChild("SayMessageRequest")
+    if say then
+        say:FireServer(msg, "All")
+        return true
     end
 
     -- 3) Fallback terakhir: ghost typing UI
@@ -150,30 +106,90 @@ local function SendChatSmart(msg)
     return true
 end
 
--- ========================================== --
--- LOOPING SISTEMATIS (anti dobel kirim)
--- ========================================== --
-local _sending = false
+function ChatSender:Push(msg)
+    table.insert(self.Queue, tostring(msg))
+    if not self.Sending then
+        task.spawn(function()
+            self:Process()
+        end)
+    end
+end
 
+function ChatSender:GetBaseDelay()
+    local rawDelay = tonumber(getgenv().DelayTextBoxInstance and getgenv().DelayTextBoxInstance.Text) or 5
+    if rawDelay < self.MinDelay then rawDelay = self.MinDelay end
+    return rawDelay
+end
+
+function ChatSender:IncreaseBackoff(reason)
+    -- backoff naik kalau gagal (anti macet di server rame / floodcheck)
+    if self.Backoff <= 0 then
+        self.Backoff = 2
+    else
+        self.Backoff = math.min(self.MaxDelay, math.floor(self.Backoff * 1.5 + 1))
+    end
+    dprint("Send gagal:", reason, "| Backoff jadi:", self.Backoff)
+end
+
+function ChatSender:DecreaseBackoff()
+    -- kalau sukses, backoff turun pelan-pelan
+    if self.Backoff > 0 then
+        self.Backoff = math.max(0, self.Backoff - 1)
+    end
+end
+
+function ChatSender:Process()
+    self.Sending = true
+
+    while getgenv().AutoChatEnabled do
+        local msg = table.remove(self.Queue, 1)
+        if not msg then break end
+
+        -- delay = user delay + backoff
+        local delay = self:GetBaseDelay() + self.Backoff
+
+        -- jaga jarak antar kirim (biar gak ketabrak throttle)
+        local since = os.clock() - (self.LastSendAt or 0)
+        if since < delay then
+            task.wait(delay - since)
+        end
+
+        local ok, reason = TrySendOnce(msg)
+        self.LastSendAt = os.clock()
+
+        if ok then
+            self:DecreaseBackoff()
+        else
+            self:IncreaseBackoff(reason)
+            -- kalau gagal, masukin lagi ke depan queue biar dicoba lagi
+            table.insert(self.Queue, 1, msg)
+            task.wait(math.min(self.MaxDelay, 2 + self.Backoff))
+        end
+
+        task.wait(0.05)
+    end
+
+    self.Sending = false
+end
+
+-- ========================================== --
+-- LOOP BARU (lebih stabil)
+-- ========================================== --
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        task.wait(0.2)
 
-        if getgenv().AutoChatEnabled and not _sending then
+        if getgenv().AutoChatEnabled then
             local pesan = (getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text) or ""
-            local rawDelay = tonumber(getgenv().DelayTextBoxInstance.Text) or 5
-            if rawDelay < 2 then rawDelay = 2 end
-
             if pesan ~= "" then
-                _sending = true
-                SendChatSmart(pesan)
-                task.wait(rawDelay)
-                _sending = false
-            else
-                task.wait(0.2)
+                -- push ke queue, biar pengiriman diatur sistem backoff
+                ChatSender:Push(pesan)
+
+                -- jangan push terlalu sering ke queue
+                task.wait(0.8)
             end
         else
-            task.wait(0.4)
+            task.wait(0.6)
         end
     end
 end)
