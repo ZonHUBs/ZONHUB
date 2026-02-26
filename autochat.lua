@@ -1,8 +1,8 @@
--- [[ ZONHUB - AUTO CHAT MODULE (ANDROID & PC FRIENDLY) ]] --
+-- [[ ZONHUB - AUTO CHAT MODULE (ANTI-BLINK & ALL CHAT SYSTEMS) ]] --
 local TargetPage = ... 
 if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-getgenv().ScriptVersion = "AutoChat v2.0 - Mobile Fix" 
+getgenv().ScriptVersion = "AutoChat v2.1 - Anti Blink Fix" 
 
 -- ========================================== --
 -- VARIABEL GLOBAL 
@@ -77,13 +77,10 @@ local function CreateTextBox(Parent, Text, Default, Var, IsNumber)
     local IC = Instance.new("UICorner", InputBox)
     IC.CornerRadius = UDim.new(0, 4)
     
-    -- REAL-TIME SAVING: Solusi untuk Android agar teks pasti tersimpan tanpa nunggu enter
     InputBox:GetPropertyChangedSignal("Text"):Connect(function()
         if IsNumber then
             local val = tonumber(InputBox.Text)
-            if val then 
-                getgenv()[Var] = val 
-            end
+            if val then getgenv()[Var] = val end
         else
             getgenv()[Var] = InputBox.Text
         end
@@ -91,7 +88,7 @@ local function CreateTextBox(Parent, Text, Default, Var, IsNumber)
 
     InputBox.FocusLost:Connect(function()
         if IsNumber and not tonumber(InputBox.Text) then
-            InputBox.Text = tostring(getgenv()[Var]) -- Kembalikan ke angka jika user ketik huruf
+            InputBox.Text = tostring(getgenv()[Var]) 
         end
     end)
 end
@@ -104,23 +101,50 @@ CreateTextBox(TargetPage, "Isi Pesan Chat", getgenv().AutoChatMessage, "AutoChat
 CreateTextBox(TargetPage, "Delay (Detik)", getgenv().AutoChatDelay, "AutoChatDelay", true)
 
 -- ========================================== --
--- FUNGSI MENGIRIM PESAN (DEEP SEARCH UNTUK MOBILE)
+-- FUNGSI MENGIRIM PESAN (BRUTE-FORCE SYSTEM)
 -- ========================================== --
 local function SendChatMessage(msg)
+    -- 1. Coba Kirim Lewat TextChatService (Sistem Baru Roblox)
     pcall(function()
         if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-            -- Sistem Chat Baru (TCS)
-            local textChannel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-            if textChannel then
-                textChannel:SendAsync(msg)
+            local sent = false
+            -- Cari channel utama (RBXGeneral)
+            local generalChannel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+            if generalChannel then
+                generalChannel:SendAsync(msg)
+                sent = true
             end
-        else
-            -- Sistem Chat Lama (Legacy) - Deep Search aktif
-            local sayMsgRemote = ReplicatedStorage:FindFirstChild("SayMessageRequest", true)
-            if sayMsgRemote and sayMsgRemote:IsA("RemoteEvent") then
-                sayMsgRemote:FireServer(msg, "All")
+            
+            -- Jika RBXGeneral tidak ada, paksa kirim ke SEMUA channel yang ada
+            if not sent then
+                for _, channel in ipairs(TextChatService.TextChannels:GetChildren()) do
+                    if channel:IsA("TextChannel") then
+                        channel:SendAsync(msg)
+                    end
+                end
             end
         end
+    end)
+
+    -- 2. Coba Kirim Lewat Legacy Chat (Sistem Lama Roblox)
+    pcall(function()
+        if TextChatService.ChatVersion == Enum.ChatVersion.LegacyChatService then
+            local chatEvents = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+            if chatEvents and chatEvents:FindFirstChild("SayMessageRequest") then
+                chatEvents.SayMessageRequest:FireServer(msg, "All")
+            else
+                -- Deep search jika disembunyikan oleh dev game
+                local remote = ReplicatedStorage:FindFirstChild("SayMessageRequest", true)
+                if remote and remote:IsA("RemoteEvent") then
+                    remote:FireServer(msg, "All")
+                end
+            end
+        end
+    end)
+
+    -- 3. Fallback Darurat: Paksa munculkan Chat Bubble di atas kepala karakter
+    pcall(function()
+        Players:Chat(msg)
     end)
 end
 
@@ -133,8 +157,11 @@ task.spawn(function()
             local pesan = getgenv().AutoChatMessage
             local jeda = getgenv().AutoChatDelay
             
-            -- Anti-Crash & Anti-Spam
-            if type(jeda) ~= "number" or jeda < 1 then jeda = 1 end 
+            -- PENTING: Batas aman Anti-Spam Roblox adalah minimal 3 detik. 
+            -- Jika di bawah itu, Roblox akan nge-bug / berkedip ikonnya.
+            if type(jeda) ~= "number" or jeda < 3 then 
+                jeda = 3 
+            end 
             
             if pesan and pesan ~= "" then
                 SendChatMessage(pesan)
