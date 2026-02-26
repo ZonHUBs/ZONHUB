@@ -1,17 +1,15 @@
--- [[ ZONHUB - AUTO CHAT MODULE (CORE INJECTION) ]] --
+-- [[ ZONHUB - AUTO CHAT MODULE (REMOTE INJECTION) ]] --
 local TargetPage = ... 
 if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-getgenv().ScriptVersion = "AutoChat v14.0 - Core Injection" 
+getgenv().ScriptVersion = "AutoChat v15.0 - Remote Force" 
 
 -- ========================================== --
--- SERVICES
+-- VARIABEL & SERVICES
 -- ========================================== --
 getgenv().AutoChatEnabled = false
-local Players = game:GetService("Players")
-local LP = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextChatService = game:GetService("TextChatService")
-local VIM = game:GetService("VirtualInputManager")
 
 -- ========================================== --
 -- FUNGSI UI UTILITY
@@ -68,41 +66,35 @@ getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "Zon
 getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
 
 -- ========================================== --
--- LOGIKA CORE INJECTION
+-- LOGIKA REMOTE INJECTION (BYPASS UI)
 -- ========================================== --
-local function ForceChatSystematic(msg)
+local function RemoteForceChat(msg)
+    -- METODE A: TextChatService (Sistem Terbaru)
     pcall(function()
-        -- 1. Buka Chat Window (Visual)
-        VIM:SendKeyEvent(true, Enum.KeyCode.Slash, false, game)
-        task.wait(0.2)
-        VIM:SendKeyEvent(false, Enum.KeyCode.Slash, false, game)
-        task.wait(0.2)
-
-        -- 2. Temukan TextBox Chat secara agresif (Semua versi Roblox)
-        local ChatBar = nil
-        -- Cari di PlayerGui
-        for _, v in pairs(LP.PlayerGui:GetDescendants()) do
-            if v:IsA("TextBox") and (v.Name:lower():find("chat") or v.Name:lower():find("bar") or v.Name:lower():find("input")) then
-                ChatBar = v
-                break
-            end
-        end
-        
-        -- 3. Isi teks dan kirim
-        if ChatBar then
-            ChatBar.Text = msg
-            task.wait(0.1)
-            -- Memicu Enter secara internal agar server memproses pesan
-            ChatBar:ReleaseFocus(true) 
-        end
-
-        -- 4. Backup: Kirim via SendAsync jika UI Injection gagal
-        -- Ini khusus untuk akun non-VC yang memakai TextChatService
         if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-            local GeneralChannel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-            if GeneralChannel then
-                GeneralChannel:SendAsync(msg)
+            -- Cari channel secara paksa
+            local channels = TextChatService:FindFirstChild("TextChannels")
+            if channels then
+                -- Kirim ke RBXGeneral (Utama)
+                local general = channels:FindFirstChild("RBXGeneral")
+                if general then
+                    general:SendAsync(msg)
+                end
+                -- Kirim ke semua channel lain sebagai backup
+                for _, v in pairs(channels:GetChildren()) do
+                    if v:IsA("TextChannel") and v.Name ~= "RBXGeneral" then
+                        v:SendAsync(msg)
+                    end
+                end
             end
+        end
+    end)
+
+    -- METODE B: Legacy Remote (Sistem Lama)
+    pcall(function()
+        local remote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+        if remote and remote:FindFirstChild("SayMessageRequest") then
+            remote.SayMessageRequest:FireServer(msg, "All")
         end
     end)
 end
@@ -112,15 +104,18 @@ end
 -- ========================================== --
 task.spawn(function()
     while true do
-        task.wait(0.5)
+        task.wait(0.1)
         if getgenv().AutoChatEnabled then
             local pesan = getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text or ""
             local rawDelay = tonumber(getgenv().DelayTextBoxInstance.Text) or 5
             
             if pesan ~= "" then
-                if rawDelay < 2 then rawDelay = 2 end
-                ForceChatSystematic(pesan)
+                if rawDelay < 1.5 then rawDelay = 1.5 end -- Minimal delay agar tidak kena filter
+                
+                RemoteForceChat(pesan)
                 task.wait(rawDelay)
+            else
+                task.wait(0.5)
             end
         end
     end
