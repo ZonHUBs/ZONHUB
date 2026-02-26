@@ -1,15 +1,16 @@
--- [[ ZONHUB - AUTO CHAT MODULE (ANTI-BLINK & ALL CHAT SYSTEMS) ]] --
+-- [[ ZONHUB - AUTO CHAT MODULE (ALL ACCOUNTS & NON-VC SUPPORT) ]] --
 local TargetPage = ... 
 if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-getgenv().ScriptVersion = "AutoChat v2.1 - Anti Blink Fix" 
+getgenv().ScriptVersion = "AutoChat v4.0 - Universal Bypass" 
 
 -- ========================================== --
 -- VARIABEL GLOBAL 
 -- ========================================== --
 getgenv().AutoChatEnabled = false
-getgenv().AutoChatMessage = "ZonHub On Top!" 
 getgenv().AutoChatDelay = 5                  
+getgenv().ChatTextBoxInstance = nil 
+getgenv().DelayTextBoxInstance = nil 
 -- ========================================== --
 
 local Players = game:GetService("Players")
@@ -18,7 +19,7 @@ local TextChatService = game:GetService("TextChatService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- ========================================== --
--- FUNGSI UI UTILITY (MOBILE FRIENDLY)
+-- FUNGSI UI UTILITY
 -- ========================================== --
 local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
 
@@ -47,7 +48,7 @@ local function CreateToggle(Parent, Text, Var)
     end) 
 end
 
-local function CreateTextBox(Parent, Text, Default, Var, IsNumber) 
+local function CreateTextBox(Parent, Text, Default, IsNumber) 
     local Frame = Instance.new("Frame", Parent)
     Frame.BackgroundColor3 = Theme.Item
     Frame.Size = UDim2.new(1, -10, 0, 35)
@@ -76,96 +77,67 @@ local function CreateTextBox(Parent, Text, Default, Var, IsNumber)
     InputBox.TextXAlignment = Enum.TextXAlignment.Center
     local IC = Instance.new("UICorner", InputBox)
     IC.CornerRadius = UDim.new(0, 4)
-    
-    InputBox:GetPropertyChangedSignal("Text"):Connect(function()
-        if IsNumber then
-            local val = tonumber(InputBox.Text)
-            if val then getgenv()[Var] = val end
-        else
-            getgenv()[Var] = InputBox.Text
-        end
-    end)
 
-    InputBox.FocusLost:Connect(function()
-        if IsNumber and not tonumber(InputBox.Text) then
-            InputBox.Text = tostring(getgenv()[Var]) 
-        end
-    end)
+    if IsNumber then
+        InputBox.FocusLost:Connect(function()
+            if not tonumber(InputBox.Text) then
+                InputBox.Text = tostring(Default) 
+            end
+        end)
+    end
+    
+    return InputBox 
 end
 
 -- ========================================== --
 -- MEMBANGUN MENU UI 
 -- ========================================== --
 CreateToggle(TargetPage, "Start Auto Chat", "AutoChatEnabled")
-CreateTextBox(TargetPage, "Isi Pesan Chat", getgenv().AutoChatMessage, "AutoChatMessage", false)
-CreateTextBox(TargetPage, "Delay (Detik)", getgenv().AutoChatDelay, "AutoChatDelay", true)
+getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "ZonHub On Top!", false)
+getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
 
 -- ========================================== --
--- FUNGSI MENGIRIM PESAN (BRUTE-FORCE SYSTEM)
+-- FUNGSI MENGIRIM PESAN (BRUTE-FORCE SEMUA JALUR)
 -- ========================================== --
 local function SendChatMessage(msg)
-    -- 1. Coba Kirim Lewat TextChatService (Sistem Baru Roblox)
+    -- JALUR 1: Untuk Akun dengan Voice Chat & Game Sistem Baru
     pcall(function()
-        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-            local sent = false
-            -- Cari channel utama (RBXGeneral)
-            local generalChannel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-            if generalChannel then
-                generalChannel:SendAsync(msg)
-                sent = true
-            end
-            
-            -- Jika RBXGeneral tidak ada, paksa kirim ke SEMUA channel yang ada
-            if not sent then
-                for _, channel in ipairs(TextChatService.TextChannels:GetChildren()) do
-                    if channel:IsA("TextChannel") then
-                        channel:SendAsync(msg)
-                    end
-                end
-            end
-        end
+        TextChatService.TextChannels.RBXGeneral:SendAsync(msg)
     end)
 
-    -- 2. Coba Kirim Lewat Legacy Chat (Sistem Lama Roblox)
+    -- JALUR 2: Untuk Akun Biasa (Non-VC) & Anak-Anak
     pcall(function()
-        if TextChatService.ChatVersion == Enum.ChatVersion.LegacyChatService then
-            local chatEvents = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
-            if chatEvents and chatEvents:FindFirstChild("SayMessageRequest") then
-                chatEvents.SayMessageRequest:FireServer(msg, "All")
-            else
-                -- Deep search jika disembunyikan oleh dev game
-                local remote = ReplicatedStorage:FindFirstChild("SayMessageRequest", true)
-                if remote and remote:IsA("RemoteEvent") then
-                    remote:FireServer(msg, "All")
-                end
-            end
-        end
+        ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(msg, "All")
     end)
 
-    -- 3. Fallback Darurat: Paksa munculkan Chat Bubble di atas kepala karakter
+    -- JALUR 3: Bypass jika developer game mengubah lokasi folder chat
+    pcall(function()
+        local remote = ReplicatedStorage:FindFirstChild("SayMessageRequest", true)
+        if remote then remote:FireServer(msg, "All") end
+    end)
+
+    -- JALUR 4: Fallback Universal (Memaksa memunculkan Bubble Chat di atas kepala)
     pcall(function()
         Players:Chat(msg)
     end)
 end
 
 -- ========================================== --
--- LOGIKA LOOPING AUTO CHAT
+-- LOGIKA LOOPING AUTO CHAT 
 -- ========================================== --
 task.spawn(function()
     while true do
         if getgenv().AutoChatEnabled then
-            local pesan = getgenv().AutoChatMessage
-            local jeda = getgenv().AutoChatDelay
+            -- Membaca langsung dari UI agar support semua keyboard Android/PC
+            local pesan = getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text or "ZonHub On Top!"
+            local rawDelay = getgenv().DelayTextBoxInstance and tonumber(getgenv().DelayTextBoxInstance.Text) or 5
             
-            -- PENTING: Batas aman Anti-Spam Roblox adalah minimal 3 detik. 
-            -- Jika di bawah itu, Roblox akan nge-bug / berkedip ikonnya.
-            if type(jeda) ~= "number" or jeda < 3 then 
-                jeda = 3 
-            end 
+            -- Batas delay aman 3 detik agar tidak diblokir Anti-Spam Roblox
+            if rawDelay < 3 then rawDelay = 3 end 
             
-            if pesan and pesan ~= "" then
+            if pesan and pesan:match("%S") then 
                 SendChatMessage(pesan)
-                task.wait(jeda)
+                task.wait(rawDelay)
             else
                 task.wait(1)
             end
