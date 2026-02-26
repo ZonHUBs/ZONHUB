@@ -1,17 +1,17 @@
--- [[ ZONHUB - AUTO CHAT MODULE (FOCUS LOCK) ]] --
+-- [[ ZONHUB - AUTO CHAT MODULE (GHOST TYPE SMOOTH) ]] --
 local TargetPage = ... 
 if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-getgenv().ScriptVersion = "AutoChat v19.0 - Focus Lock" 
+getgenv().ScriptVersion = "AutoChat v20.0 - Ghost Smooth" 
 
 -- ========================================== --
--- SERVICES & VARIABLES
+-- SERVICES
 -- ========================================== --
 getgenv().AutoChatEnabled = false
+local VIM = game:GetService("VirtualInputManager")
+local UIS = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
-local TextChatService = game:GetService("TextChatService")
-local VIM = game:GetService("VirtualInputManager")
 
 -- ========================================== --
 -- FUNGSI UI UTILITY
@@ -68,31 +68,31 @@ getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "Zon
 getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
 
 -- ========================================== --
--- LOGIKA FOCUS LOCK
+-- LOGIKA GHOST TYPING (OPTIMIZED)
 -- ========================================== --
-local function ForceChat(msg)
+local function GhostTypeSmooth(msg)
     pcall(function()
-        -- Cari ChatBar di PlayerGui
-        local chatBar = nil
-        for _, v in pairs(LP.PlayerGui:GetDescendants()) do
-            if v:IsA("TextBox") and (v.Name:lower():find("chat") or v.Name:lower():find("bar")) then
-                chatBar = v
-                break
-            end
+        -- 1. Buka chat dengan Slash
+        VIM:SendKeyEvent(true, Enum.KeyCode.Slash, false, game)
+        task.wait(0.05)
+        VIM:SendKeyEvent(false, Enum.KeyCode.Slash, false, game)
+        
+        -- 2. Tunggu sebentar sampai TextBox fokus
+        local box = nil
+        local t = 0
+        while not box and t < 5 do
+            box = UIS:GetFocusedTextBox()
+            task.wait(0.05)
+            t = t + 1
         end
 
-        if chatBar then
-            -- Langkah 1: Paksa Fokus ke Chat Bar
-            chatBar:CaptureFocus()
-            
-            -- Langkah 2: Isi Teks secara instan (Menghapus input keyboard lain)
-            chatBar.Text = msg
+        if box then
+            -- 3. Injeksi teks langsung (Anti-Interference)
+            -- Kita set teksnya secara paksa agar tombol jalan (WASD) tidak masuk
+            box.Text = msg
             task.wait(0.05)
             
-            -- Langkah 3: Lepas Fokus dengan sinyal Enter (true)
-            chatBar:ReleaseFocus(true)
-            
-            -- Langkah 4: Tambahan Virtual Enter untuk memastikan terkirim
+            -- 4. Kirim dengan Enter
             VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
             task.wait(0.05)
             VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
@@ -101,7 +101,7 @@ local function ForceChat(msg)
 end
 
 -- ========================================== --
--- LOOPING
+-- LOOPING SISTEMATIS
 -- ========================================== --
 task.spawn(function()
     while true do
@@ -111,8 +111,8 @@ task.spawn(function()
             local rawDelay = tonumber(getgenv().DelayTextBoxInstance.Text) or 5
             
             if pesan ~= "" then
-                if rawDelay < 2 then rawDelay = 2 end
-                ForceChat(pesan)
+                if rawDelay < 2 then rawDelay = 2 end -- Kecepatan maksimal yang aman
+                GhostTypeSmooth(pesan)
                 task.wait(rawDelay)
             end
         else
