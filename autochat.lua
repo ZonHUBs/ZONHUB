@@ -1,14 +1,13 @@
--- [[ ZONHUB - AUTO CHAT MODULE (FORCE ALL CHANNELS) ]] --
+-- [[ ZONHUB - AUTO CHAT MODULE (UNIVERSAL FIX) ]] --
 local TargetPage = ... 
 if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-getgenv().ScriptVersion = "AutoChat v5.0 - Ultimate Engine" 
+getgenv().ScriptVersion = "AutoChat v6.0 - Universal Edition" 
 
 -- ========================================== --
 -- VARIABEL GLOBAL 
 -- ========================================== --
 getgenv().AutoChatEnabled = false
-getgenv().AutoChatDelay = 5                  
 getgenv().ChatTextBoxInstance = nil 
 getgenv().DelayTextBoxInstance = nil 
 -- ========================================== --
@@ -19,7 +18,7 @@ local TextChatService = game:GetService("TextChatService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- ========================================== --
--- FUNGSI UI UTILITY
+-- FUNGSI UI UTILITY (Tetap Sama)
 -- ========================================== --
 local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
 
@@ -56,36 +55,17 @@ local function CreateTextBox(Parent, Text, Default, IsNumber)
     C.CornerRadius = UDim.new(0, 6)
     
     local Label = Instance.new("TextLabel", Frame)
-    Label.Text = Text
-    Label.TextColor3 = Theme.Text
-    Label.BackgroundTransparency = 1
-    Label.Size = UDim2.new(0.45, 0, 1, 0)
-    Label.Position = UDim2.new(0, 10, 0, 0)
-    Label.Font = Enum.Font.GothamSemibold
-    Label.TextSize = 12
-    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.45, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left
     
     local InputBox = Instance.new("TextBox", Frame)
-    InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    InputBox.Position = UDim2.new(0.5, 0, 0.15, 0)
-    InputBox.Size = UDim2.new(0.45, 0, 0.7, 0)
-    InputBox.Font = Enum.Font.GothamSemibold
-    InputBox.TextSize = 11
-    InputBox.TextColor3 = Theme.Text
-    InputBox.Text = tostring(Default)
-    InputBox.ClearTextOnFocus = false
-    InputBox.TextXAlignment = Enum.TextXAlignment.Center
-    local IC = Instance.new("UICorner", InputBox)
-    IC.CornerRadius = UDim.new(0, 4)
+    InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); InputBox.Position = UDim2.new(0.5, 0, 0.15, 0); InputBox.Size = UDim2.new(0.45, 0, 0.7, 0); InputBox.Font = Enum.Font.GothamSemibold; InputBox.TextSize = 11; InputBox.TextColor3 = Theme.Text; InputBox.Text = tostring(Default); InputBox.ClearTextOnFocus = false; InputBox.TextXAlignment = Enum.TextXAlignment.Center
+    local IC = Instance.new("UICorner", InputBox); IC.CornerRadius = UDim.new(0, 4)
 
     if IsNumber then
         InputBox.FocusLost:Connect(function()
-            if not tonumber(InputBox.Text) then
-                InputBox.Text = tostring(Default) 
-            end
+            if not tonumber(InputBox.Text) then InputBox.Text = tostring(Default) end
         end)
     end
-    
     return InputBox 
 end
 
@@ -97,66 +77,53 @@ getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "Zon
 getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
 
 -- ========================================== --
--- FUNGSI MENGIRIM PESAN (FORCE ALL CHANNELS)
+-- FUNGSI MENGIRIM PESAN (HYBRID SYSTEM)
 -- ========================================== --
 local function ForceSendChat(msg)
-    -- SISTEM BARU (TextChatService)
-    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-        local success = false
-        pcall(function()
-            local rbxGeneral = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-            if rbxGeneral then
-                rbxGeneral:SendAsync(msg)
-                success = true
-            end
-        end)
-        
-        -- Jika gagal di RBXGeneral (biasa terjadi pada akun Non-VC / <13), 
-        -- kita paksa broadcast ke seluruh channel yang ada!
-        if not success then
-            pcall(function()
-                for _, channel in pairs(TextChatService:GetDescendants()) do
-                    if channel:IsA("TextChannel") then
-                        pcall(function() channel:SendAsync(msg) end)
-                    end
-                end
-            end)
-        end
-    
-    -- SISTEM LAMA (LegacyChatService)
-    else
-        pcall(function()
-            ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(msg, "All")
-        end)
-    end
-    
-    -- FALLBACK UNIVERSAL (Memunculkan chat di atas kepala karakter)
+    -- METODE 1: TextChatService (Sistem Baru)
+    -- Kita kirim ke SEMUA TextChannel yang ditemukan, bukan cuma RBXGeneral
     pcall(function()
-        Players:Chat(msg)
+        local channels = TextChatService:WaitForChild("TextChannels", 2)
+        if channels then
+            for _, channel in pairs(channels:GetChildren()) do
+                if channel:IsA("TextChannel") then
+                    channel:SendAsync(msg)
+                end
+            end
+        end
+    end)
+
+    -- METODE 2: Legacy Chat (Sistem Lama)
+    -- Banyak game lama atau akun tertentu masih menggunakan ini
+    pcall(function()
+        local SayMessageRequest = ReplicatedStorage:FindFirstChild("SayMessageRequest", true) or ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents"):FindFirstChild("SayMessageRequest")
+        if SayMessageRequest then
+            SayMessageRequest:FireServer(msg, "All")
+        end
+    end)
+
+    -- METODE 3: Fallback Player:Chat
+    -- Menjamin bubble chat muncul di atas kepala jika sistem chat server gagal
+    pcall(function()
+        LP:Chat(msg)
     end)
 end
 
 -- ========================================== --
--- LOGIKA LOOPING AUTO CHAT 
+-- LOGIKA LOOPING
 -- ========================================== --
 task.spawn(function()
-    while true do
+    while task.wait(0.5) do
         if getgenv().AutoChatEnabled then
-            -- Ambil teks terbaru langsung dari UI
-            local pesan = getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text or "ZonHub On Top!"
-            local rawDelay = getgenv().DelayTextBoxInstance and tonumber(getgenv().DelayTextBoxInstance.Text) or 5
+            local pesan = getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text or "ZonHub"
+            local rawDelay = tonumber(getgenv().DelayTextBoxInstance.Text) or 5
             
-            -- Cegah spam terlalu cepat yang membuat chat error/delay
-            if rawDelay < 3 then rawDelay = 3 end 
+            if rawDelay < 1 then rawDelay = 1 end -- Minimal delay 1 detik agar tidak kena ban
             
-            if pesan and pesan:match("%S") then 
+            if pesan ~= "" then
                 ForceSendChat(pesan)
                 task.wait(rawDelay)
-            else
-                task.wait(1)
             end
-        else
-            task.wait(0.5)
         end
     end
 end)
