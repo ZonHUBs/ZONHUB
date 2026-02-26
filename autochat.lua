@@ -1,15 +1,17 @@
--- [[ ZONHUB - AUTO CHAT MODULE (REMOTE INJECTION) ]] --
+-- [[ ZONHUB - AUTO CHAT MODULE (GHOST TYPING) ]] --
 local TargetPage = ... 
 if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-getgenv().ScriptVersion = "AutoChat v15.0 - Remote Force" 
+getgenv().ScriptVersion = "AutoChat v17.0 - Ghost Type" 
 
 -- ========================================== --
--- VARIABEL & SERVICES
+-- SERVICES
 -- ========================================== --
 getgenv().AutoChatEnabled = false
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TextChatService = game:GetService("TextChatService")
+local VIM = game:GetService("VirtualInputManager")
+local UIS = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local LP = Players.LocalPlayer
 
 -- ========================================== --
 -- FUNGSI UI UTILITY
@@ -66,35 +68,37 @@ getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "Zon
 getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
 
 -- ========================================== --
--- LOGIKA REMOTE INJECTION (BYPASS UI)
+-- LOGIKA GHOST TYPING (SISTEMATIS)
 -- ========================================== --
-local function RemoteForceChat(msg)
-    -- METODE A: TextChatService (Sistem Terbaru)
+local function GhostType(msg)
     pcall(function()
-        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-            -- Cari channel secara paksa
-            local channels = TextChatService:FindFirstChild("TextChannels")
-            if channels then
-                -- Kirim ke RBXGeneral (Utama)
-                local general = channels:FindFirstChild("RBXGeneral")
-                if general then
-                    general:SendAsync(msg)
-                end
-                -- Kirim ke semua channel lain sebagai backup
-                for _, v in pairs(channels:GetChildren()) do
-                    if v:IsA("TextChannel") and v.Name ~= "RBXGeneral" then
-                        v:SendAsync(msg)
-                    end
-                end
-            end
-        end
-    end)
+        -- 1. Pastikan game dalam fokus sebelum mulai
+        VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+        task.wait(0.1)
+        VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
 
-    -- METODE B: Legacy Remote (Sistem Lama)
-    pcall(function()
-        local remote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
-        if remote and remote:FindFirstChild("SayMessageRequest") then
-            remote.SayMessageRequest:FireServer(msg, "All")
+        -- 2. Tekan "/" untuk membuka chat
+        VIM:SendKeyEvent(true, Enum.KeyCode.Slash, false, game)
+        task.wait(0.2)
+        VIM:SendKeyEvent(false, Enum.KeyCode.Slash, false, game)
+        task.wait(0.5) -- Tunggu jendela chat benar-benar terbuka
+
+        -- 3. Cari TextBox Chat yang sedang fokus secara paksa
+        local box = UIS:GetFocusedTextBox()
+        if box then
+            -- Masukkan teks secara instan
+            box.Text = msg
+            task.wait(0.2)
+            
+            -- 4. Tekan Enter untuk mengirim
+            VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+            task.wait(0.1)
+            VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+        else
+            -- Jika gagal fokus, coba klik posisi tengah atas (lokasi umum chat bar)
+            VIM:SendMouseButtonEvent(100, 100, 0, true, game, 0)
+            task.wait(0.1)
+            VIM:SendMouseButtonEvent(100, 100, 0, false, game, 0)
         end
     end)
 end
@@ -104,18 +108,15 @@ end
 -- ========================================== --
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        task.wait(1)
         if getgenv().AutoChatEnabled then
             local pesan = getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text or ""
             local rawDelay = tonumber(getgenv().DelayTextBoxInstance.Text) or 5
             
             if pesan ~= "" then
-                if rawDelay < 1.5 then rawDelay = 1.5 end -- Minimal delay agar tidak kena filter
-                
-                RemoteForceChat(pesan)
+                if rawDelay < 3 then rawDelay = 3 end -- Delay aman agar tidak kedip terus
+                GhostType(pesan)
                 task.wait(rawDelay)
-            else
-                task.wait(0.5)
             end
         end
     end
