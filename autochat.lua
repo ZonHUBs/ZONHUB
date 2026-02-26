@@ -1,17 +1,16 @@
--- [[ ZONHUB - AUTO CHAT MODULE (DIRECT FLOW) ]] --
+-- [[ ZONHUB - AUTO CHAT MODULE (VIRTUAL INPUT) ]] --
 local TargetPage = ... 
 if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-getgenv().ScriptVersion = "AutoChat v11.0 - Direct Flow" 
+getgenv().ScriptVersion = "AutoChat v12.0 - Virtual Input" 
 
 -- ========================================== --
--- VARIABEL & SERVICES
+-- SERVICES
 -- ========================================== --
 getgenv().AutoChatEnabled = false
+local VIM = game:GetService("VirtualInputManager")
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
-local TextChatService = game:GetService("TextChatService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- ========================================== --
 -- FUNGSI UI UTILITY
@@ -68,35 +67,27 @@ getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "Zon
 getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
 
 -- ========================================== --
--- LOGIKA UTAMA (DIRECT FLOW)
+-- LOGIKA VIRTUAL INPUT (BYPASS TOTAL)
 -- ========================================== --
-local function DirectSend(msg)
-    -- Memastikan jendela chat terbuka (Bypass kedip)
+local function VirtualType(msg)
     pcall(function()
-        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-            -- Paksa tampilkan window chat agar sistem tidak memblokir SendAsync
-            local gui = game:GetService("CoreGui"):FindFirstChild("ExperienceChat")
-            if gui then gui.Enabled = true end
-            
-            -- Kirim langsung ke semua channel yang tersedia
-            local channels = TextChatService:FindFirstChild("TextChannels")
-            if channels then
-                for _, v in pairs(channels:GetChildren()) do
-                    if v:IsA("TextChannel") then
-                        v:SendAsync(msg)
-                    end
-                end
-            end
-        else
-            -- Sistem Legacy
-            local event = ReplicatedStorage:FindFirstChild("SayMessageRequest", true)
-            if event then
-                event:FireServer(msg, "All")
-            end
-        end
+        -- 1. Tekan tombol "/" untuk buka chat (Sinyal Keyboard)
+        VIM:SendKeyEvent(true, Enum.KeyCode.Slash, false, game)
+        task.wait(0.2)
+        VIM:SendKeyEvent(false, Enum.KeyCode.Slash, false, game)
+        task.wait(0.3)
         
-        -- Fallback: Menampilkan bubble chat di atas karakter
-        LP:Chat(msg)
+        -- 2. Ketik Pesan secara cepat
+        for i = 1, #msg do
+            local char = msg:sub(i, i)
+            VIM:SendTextGuiEvent(char, game) -- Mengetik karakter ke UI yang sedang fokus
+        end
+        task.wait(0.2)
+        
+        -- 3. Tekan Enter untuk kirim
+        VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+        task.wait(0.1)
+        VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
     end)
 end
 
@@ -105,19 +96,16 @@ end
 -- ========================================== --
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        task.wait(0.5)
         if getgenv().AutoChatEnabled then
             local pesan = getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text or ""
             local rawDelay = tonumber(getgenv().DelayTextBoxInstance.Text) or 5
             
             if pesan ~= "" then
-                if rawDelay < 2 then rawDelay = 2 end
-                
-                DirectSend(pesan)
+                if rawDelay < 3 then rawDelay = 3 end -- Delay aman agar tidak double chat
+                VirtualType(pesan)
                 task.wait(rawDelay)
             end
-        else
-            task.wait(0.5)
         end
     end
 end)
