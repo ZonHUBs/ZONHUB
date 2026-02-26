@@ -1,8 +1,8 @@
--- [[ ZONHUB - AUTO CHAT MODULE (VIRTUAL INPUT) ]] --
+-- [[ ZONHUB - AUTO CHAT MODULE (FIXED FILL & SEND) ]] --
 local TargetPage = ... 
 if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-getgenv().ScriptVersion = "AutoChat v12.0 - Virtual Input" 
+getgenv().ScriptVersion = "AutoChat v13.0 - Perfect Sync" 
 
 -- ========================================== --
 -- SERVICES
@@ -11,6 +11,7 @@ getgenv().AutoChatEnabled = false
 local VIM = game:GetService("VirtualInputManager")
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
 
 -- ========================================== --
 -- FUNGSI UI UTILITY
@@ -67,32 +68,41 @@ getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "Zon
 getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
 
 -- ========================================== --
--- LOGIKA VIRTUAL INPUT (BYPASS TOTAL)
+-- LOGIKA PENGISIAN & PENGIRIMAN
 -- ========================================== --
-local function VirtualType(msg)
+local function PerfectChat(msg)
     pcall(function()
-        -- 1. Tekan tombol "/" untuk buka chat (Sinyal Keyboard)
+        -- 1. Buka Chat (Menekan "/")
         VIM:SendKeyEvent(true, Enum.KeyCode.Slash, false, game)
         task.wait(0.2)
         VIM:SendKeyEvent(false, Enum.KeyCode.Slash, false, game)
-        task.wait(0.3)
         
-        -- 2. Ketik Pesan secara cepat
-        for i = 1, #msg do
-            local char = msg:sub(i, i)
-            VIM:SendTextGuiEvent(char, game) -- Mengetik karakter ke UI yang sedang fokus
+        -- 2. Cari TextBox yang sedang fokus (TextBox Chat)
+        local focusedTextBox = UserInputService:GetFocusedTextBox()
+        local attempts = 0
+        
+        -- Tunggu sebentar sampai TextBox benar-benar fokus
+        while not focusedTextBox and attempts < 10 do
+            task.wait(0.1)
+            focusedTextBox = UserInputService:GetFocusedTextBox()
+            attempts = attempts + 1
         end
-        task.wait(0.2)
-        
-        -- 3. Tekan Enter untuk kirim
-        VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-        task.wait(0.1)
-        VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+
+        if focusedTextBox then
+            -- 3. Isi teks langsung ke box chat
+            focusedTextBox.Text = msg
+            task.wait(0.2)
+            
+            -- 4. Kirim (Menekan Enter)
+            VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+            task.wait(0.1)
+            VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+        end
     end)
 end
 
 -- ========================================== --
--- LOOPING
+-- LOOPING SISTEMATIS
 -- ========================================== --
 task.spawn(function()
     while true do
@@ -102,8 +112,8 @@ task.spawn(function()
             local rawDelay = tonumber(getgenv().DelayTextBoxInstance.Text) or 5
             
             if pesan ~= "" then
-                if rawDelay < 3 then rawDelay = 3 end -- Delay aman agar tidak double chat
-                VirtualType(pesan)
+                if rawDelay < 2 then rawDelay = 2 end
+                PerfectChat(pesan)
                 task.wait(rawDelay)
             end
         end
