@@ -1,74 +1,127 @@
--- [[ ZONHUB - AUTO CHAT MODULE v22.0 - ULTIMATE UI FIX ]] --
-local TargetPage = ...
-if not TargetPage then return end
+-- [[ ZONHUB - AUTO CHAT MODULE ]] --
+local TargetPage = ... 
+if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-local G = getgenv()
-G.AutoChatEnabled = false
+getgenv().ScriptVersion = "AutoChat v23.0 - Universal Fix" 
 
+-- ========================================== --
+-- VARIABEL GLOBAL 
+-- ========================================== --
+getgenv().AutoChatEnabled = false
+getgenv().AutoChatMessage = "ZonHub On Top!" -- Teks default
+getgenv().AutoChatDelay = 5                  -- Delay default (detik)
+-- ========================================== --
+
+local Players = game:GetService("Players")
+local LP = Players.LocalPlayer
+local TextChatService = game:GetService("TextChatService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VIM = game:GetService("VirtualInputManager")
 local UIS = game:GetService("UserInputService")
 
 -- ========================================== --
--- FUNGSI UNTUK MEMBUAT UI (DIJAMIN MUNCUL)
+-- FUNGSI UI UTILITY
 -- ========================================== --
-local function BuildControls(parent)
-    if parent:FindFirstChild("AutoChat_Controls") then return end
+local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
+
+local function CreateToggle(Parent, Text, Var) 
+    local Btn = Instance.new("TextButton", Parent)
+    Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = ""; Btn.AutoButtonColor = false
+    local C = Instance.new("UICorner", Btn); C.CornerRadius = UDim.new(0, 6)
+    local T = Instance.new("TextLabel", Btn)
+    T.Text = Text; T.TextColor3 = Theme.Text; T.Font = Enum.Font.GothamSemibold; T.TextSize = 12; T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0); T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left
+    local IndBg = Instance.new("Frame", Btn)
+    IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30)
+    local IC = Instance.new("UICorner", IndBg); IC.CornerRadius = UDim.new(1,0)
+    local Dot = Instance.new("Frame", IndBg)
+    Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100)
+    local DC = Instance.new("UICorner", Dot); DC.CornerRadius = UDim.new(1,0)
     
-    local container = Instance.new("Frame", parent)
-    container.Name = "AutoChat_Controls"
-    container.Size = UDim2.new(1, 0, 1, 0)
-    container.BackgroundTransparency = 1
+    Btn.MouseButton1Click:Connect(function() 
+        getgenv()[Var] = not getgenv()[Var]
+        if getgenv()[Var] then 
+            Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true)
+            Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple 
+        else 
+            Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true)
+            Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) 
+        end 
+    end) 
+end
+
+local function CreateTextBox(Parent, Text, Default, Var, IsNumber) 
+    local Frame = Instance.new("Frame", Parent)
+    Frame.BackgroundColor3 = Theme.Item
+    Frame.Size = UDim2.new(1, -10, 0, 35)
+    local C = Instance.new("UICorner", Frame)
+    C.CornerRadius = UDim.new(0, 6)
     
-    local layout = Instance.new("UIListLayout", container)
-    layout.Padding = UDim.new(0, 10)
-    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
-    -- Buat UI secara manual di sini agar tidak tergantung fungsi luar
-    local function CreateToggle(txt, var)
-        local b = Instance.new("TextButton", container)
-        b.Size = UDim2.new(0.9, 0, 0, 35)
-        b.Text = txt .. ": OFF"
-        b.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-        b.TextColor3 = Color3.new(1,1,1)
-        Instance.new("UICorner", b)
-        
-        b.MouseButton1Click:Connect(function()
-            G[var] = not G[var]
-            b.Text = txt .. (G[var] and ": ON" or ": OFF")
-            b.BackgroundColor3 = G[var] and Color3.fromRGB(140, 80, 255) or Color3.fromRGB(60, 60, 60)
-        end)
-    end
-
-    local function CreateInput(txt, def)
-        local f = Instance.new("Frame", container)
-        f.Size = UDim2.new(0.9, 0, 0, 40)
-        f.BackgroundTransparency = 1
-        local l = Instance.new("TextLabel", f)
-        l.Text = txt; l.Size = UDim2.new(0.4, 0, 1, 0); l.TextColor3 = Color3.new(1,1,1); l.BackgroundTransparency = 1
-        local i = Instance.new("TextBox", f)
-        i.Size = UDim2.new(0.5, 0, 0.8, 0); i.Position = UDim2.new(0.45, 0, 0.1, 0); i.Text = def; i.BackgroundColor3 = Color3.fromRGB(30,30,30); i.TextColor3 = Color3.new(1,1,1)
-        Instance.new("UICorner", i)
-        return i
-    end
-
-    CreateToggle("Start Auto Chat", "AutoChatEnabled")
-    G.ChatTextBoxInstance = CreateInput("Pesan:", "ZonHub On Top!")
-    G.DelayTextBoxInstance = CreateInput("Delay:", "5")
+    local Label = Instance.new("TextLabel", Frame)
+    Label.Text = Text
+    Label.TextColor3 = Theme.Text
+    Label.BackgroundTransparency = 1
+    Label.Size = UDim2.new(0.45, 0, 1, 0)
+    Label.Position = UDim2.new(0, 10, 0, 0)
+    Label.Font = Enum.Font.GothamSemibold
+    Label.TextSize = 12
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local InputBox = Instance.new("TextBox", Frame)
+    InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    InputBox.Position = UDim2.new(0.5, 0, 0.15, 0)
+    InputBox.Size = UDim2.new(0.45, 0, 0.7, 0)
+    InputBox.Font = Enum.Font.GothamSemibold
+    InputBox.TextSize = 11
+    InputBox.TextColor3 = Theme.Text
+    InputBox.Text = tostring(Default)
+    InputBox.ClearTextOnFocus = false
+    InputBox.TextXAlignment = Enum.TextXAlignment.Center
+    local IC = Instance.new("UICorner", InputBox)
+    IC.CornerRadius = UDim.new(0, 4)
+    
+    InputBox.FocusLost:Connect(function()
+        if IsNumber then
+            local val = tonumber(InputBox.Text)
+            if val then 
+                getgenv()[Var] = val 
+            else 
+                InputBox.Text = tostring(getgenv()[Var]) 
+            end
+        else
+            getgenv()[Var] = InputBox.Text
+        end
+    end)
 end
 
 -- ========================================== --
--- LOGIKA PENGIRIMAN (BYPASS SEMUA VERSI)
+-- MEMBANGUN MENU UI 
 -- ========================================== --
-local function SendAction(msg)
+-- Menghapus elemen lama jika script di-load ulang agar tidak dobel
+for _, v in pairs(TargetPage:GetChildren()) do
+    if v:IsA("TextButton") or v:IsA("Frame") then v:Destroy() end
+end
+
+CreateToggle(TargetPage, "Start Auto Chat", "AutoChatEnabled")
+CreateTextBox(TargetPage, "Isi Pesan Chat", getgenv().AutoChatMessage, "AutoChatMessage", false)
+CreateTextBox(TargetPage, "Delay (Detik)", getgenv().AutoChatDelay, "AutoChatDelay", true)
+
+-- ========================================== --
+-- FUNGSI MENGIRIM PESAN (SIMULASI KEYBOARD AGAR WORK)
+-- ========================================== --
+local function SendChatMessage(msg)
     pcall(function()
+        -- Simulasi tekan "/" untuk buka chat
         VIM:SendKeyEvent(true, Enum.KeyCode.Slash, false, game)
         VIM:SendKeyEvent(false, Enum.KeyCode.Slash, false, game)
-        task.wait(0.3)
         
+        task.wait(0.2)
+        
+        -- Cari kotak chat yang terbuka
         local box = UIS:GetFocusedTextBox()
         if box then
             box.Text = msg
             task.wait(0.1)
+            -- Tekan Enter
             VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
             VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
         end
@@ -76,27 +129,24 @@ local function SendAction(msg)
 end
 
 -- ========================================== --
--- STARTING SCRIPT
+-- LOGIKA LOOPING AUTO CHAT
 -- ========================================== --
--- Mencoba mount UI berkali-kali sampai muncul
-task.spawn(function()
-    for i = 1, 20 do
-        BuildControls(TargetPage)
-        task.wait(0.5)
-    end
-end)
-
--- Loop Utama
 task.spawn(function()
     while true do
-        task.wait(0.5)
-        if G.AutoChatEnabled then
-            local p = G.ChatTextBoxInstance and G.ChatTextBoxInstance.Text or ""
-            local d = tonumber(G.DelayTextBoxInstance.Text) or 5
-            if p ~= "" then
-                SendAction(p)
-                task.wait(d)
+        if getgenv().AutoChatEnabled then
+            local pesan = getgenv().AutoChatMessage
+            local jeda = getgenv().AutoChatDelay
+            
+            if pesan and pesan ~= "" then
+                if jeda < 2 then jeda = 2 end -- Delay minimal 2 detik agar lancar
+                
+                SendChatMessage(pesan)
+                task.wait(jeda)
+            else
+                task.wait(1)
             end
+        else
+            task.wait(0.5)
         end
     end
 end)
