@@ -1,16 +1,17 @@
--- [[ ZONHUB - AUTO CHAT MODULE (SMOOTH & ANTI-INTERFERENCE) ]] --
+-- [[ ZONHUB - AUTO CHAT MODULE (GHOST TYPING) ]] --
 local TargetPage = ... 
 if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-getgenv().ScriptVersion = "AutoChat v18.0 - Silent Inject" 
+getgenv().ScriptVersion = "AutoChat v17.0 - Ghost Type" 
 
 -- ========================================== --
--- VARIABEL & SERVICES
+-- SERVICES
 -- ========================================== --
 getgenv().AutoChatEnabled = false
+local VIM = game:GetService("VirtualInputManager")
+local UIS = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
-local TextChatService = game:GetService("TextChatService")
 
 -- ========================================== --
 -- FUNGSI UI UTILITY
@@ -67,51 +68,56 @@ getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "Zon
 getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
 
 -- ========================================== --
--- LOGIKA SILENT INJECTION (TIDAK TERGANGGU WASD)
+-- LOGIKA GHOST TYPING (SISTEMATIS)
 -- ========================================== --
-local function SilentSend(msg)
+local function GhostType(msg)
     pcall(function()
-        -- 1. Deteksi Sistem Chat (Sistem Baru vs Lama)
-        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-            -- Bypass total: Kirim langsung tanpa buka window chat
-            local general = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-            if general then
-                general:SendAsync(msg)
-            else
-                -- Jika RBXGeneral tidak ada, tembak ke semua channel yang aktif
-                for _, channel in pairs(TextChatService.TextChannels:GetChildren()) do
-                    if channel:IsA("TextChannel") then
-                        channel:SendAsync(msg)
-                    end
-                end
-            end
+        -- 1. Pastikan game dalam fokus sebelum mulai
+        VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+        task.wait(0.1)
+        VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+
+        -- 2. Tekan "/" untuk membuka chat
+        VIM:SendKeyEvent(true, Enum.KeyCode.Slash, false, game)
+        task.wait(0.2)
+        VIM:SendKeyEvent(false, Enum.KeyCode.Slash, false, game)
+        task.wait(0.5) -- Tunggu jendela chat benar-benar terbuka
+
+        -- 3. Cari TextBox Chat yang sedang fokus secara paksa
+        local box = UIS:GetFocusedTextBox()
+        if box then
+            -- Masukkan teks secara instan
+            box.Text = msg
+            task.wait(0.2)
+            
+            -- 4. Tekan Enter untuk mengirim
+            VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+            task.wait(0.1)
+            VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
         else
-            -- Sistem Legacy (Lama)
-            local remote = game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
-            if remote and remote:FindFirstChild("SayMessageRequest") then
-                remote.SayMessageRequest:FireServer(msg, "All")
-            end
+            -- Jika gagal fokus, coba klik posisi tengah atas (lokasi umum chat bar)
+            VIM:SendMouseButtonEvent(100, 100, 0, true, game, 0)
+            task.wait(0.1)
+            VIM:SendMouseButtonEvent(100, 100, 0, false, game, 0)
         end
     end)
 end
 
 -- ========================================== --
--- LOOPING SISTEMATIS
+-- LOOPING
 -- ========================================== --
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        task.wait(1)
         if getgenv().AutoChatEnabled then
             local pesan = getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text or ""
             local rawDelay = tonumber(getgenv().DelayTextBoxInstance.Text) or 5
             
             if pesan ~= "" then
-                if rawDelay < 1 then rawDelay = 1 end -- Sangat lancar
-                SilentSend(pesan)
+                if rawDelay < 3 then rawDelay = 3 end -- Delay aman agar tidak kedip terus
+                GhostType(pesan)
                 task.wait(rawDelay)
             end
-        else
-            task.wait(0.5)
         end
     end
 end)
