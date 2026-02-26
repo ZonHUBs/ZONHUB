@@ -1,16 +1,16 @@
--- [[ ZONHUB - AUTO CHAT MODULE (EMULATION MODE) ]] --
+-- [[ ZONHUB - AUTO CHAT MODULE (ULTIMATE BYPASS) ]] --
 local TargetPage = ... 
 if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-getgenv().ScriptVersion = "AutoChat v7.0 - Emulation Mode" 
+getgenv().ScriptVersion = "AutoChat v9.0 - UI Force" 
 
 -- ========================================== --
--- VARIABEL & SERVICE
+-- VARIABEL & SERVICES
 -- ========================================== --
 getgenv().AutoChatEnabled = false
-local VirtualUser = game:GetService("VirtualUser")
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
+local TextChatService = game:GetService("TextChatService")
 
 -- ========================================== --
 -- FUNGSI UI UTILITY
@@ -60,47 +60,60 @@ local function CreateTextBox(Parent, Text, Default, IsNumber)
 end
 
 -- ========================================== --
--- MENU UI
+-- BUILD MENU
 -- ========================================== --
 CreateToggle(TargetPage, "Start Auto Chat", "AutoChatEnabled")
 getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "ZonHub On Top!", false)
 getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
 
 -- ========================================== --
--- LOGIKA EMULASI KEYBOARD (BYPASS SISTEM)
+-- LOGIKA PENGIRIMAN (UI INJECTION)
 -- ========================================== --
-local function EmulateChat(message)
-    pcall(function()
-        -- 1. Buka Box Chat (Simulasi tekan tombol '/')
-        VirtualUser:TypeKey("/") 
-        task.wait(0.2)
-        
-        -- 2. Ketik Pesan secara instan
-        -- Catatan: Beberapa executor mungkin butuh 'TypeKey' per huruf, 
-        -- tapi SendText biasanya lebih stabil untuk kalimat.
-        VirtualUser:SendText(message)
-        task.wait(0.2)
-        
-        -- 3. Tekan Enter untuk mengirim
-        VirtualUser:TypeKey(Enum.KeyCode.Return.Value)
-    end)
+local function SendChatBypass(msg)
+    -- 1. Coba lewat sistem baru (TextChatService)
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        pcall(function()
+            local chatInputBar = LP.PlayerGui:FindFirstChild("ChatInputBar", true)
+            local textBox = chatInputBar and chatInputBar:FindFirstChildWhichIsA("TextBox", true)
+            
+            if textBox then
+                textBox:CaptureFocus()
+                textBox.Text = msg
+                task.wait(0.1)
+                textBox:ReleaseFocus(true)
+            else
+                -- Fallback jika UI tidak ketemu
+                TextChatService.TextChannels.RBXGeneral:SendAsync(msg)
+            end
+        end)
+    else
+        -- 2. Sistem Legacy (Lama)
+        pcall(function()
+            local chatBar = LP.PlayerGui:FindFirstChild("ChatBar", true)
+            if chatBar and chatBar:IsA("TextBox") then
+                chatBar:CaptureFocus()
+                chatBar.Text = msg
+                task.wait(0.1)
+                chatBar:ReleaseFocus(true)
+            else
+                game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer(msg, "All")
+            end
+        end)
+    end
 end
 
 -- ========================================== --
--- LOOPING UTAMA
+-- LOOPING
 -- ========================================== --
 task.spawn(function()
-    while true do
-        task.wait(0.5)
+    while task.wait(0.5) do
         if getgenv().AutoChatEnabled then
             local pesan = getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text or ""
             local rawDelay = tonumber(getgenv().DelayTextBoxInstance.Text) or 5
             
             if pesan ~= "" then
-                -- Menghindari spam terlalu brutal agar tidak terputus (kick)
-                if rawDelay < 2 then rawDelay = 2 end 
-                
-                EmulateChat(pesan)
+                if rawDelay < 2 then rawDelay = 2 end
+                SendChatBypass(pesan)
                 task.wait(rawDelay)
             end
         end
