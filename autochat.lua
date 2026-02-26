@@ -1,8 +1,8 @@
--- [[ ZONHUB - AUTO CHAT MODULE (SISTEMATIS BYPASS) ]] --
+-- [[ ZONHUB - AUTO CHAT MODULE (DIRECT FLOW) ]] --
 local TargetPage = ... 
 if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-getgenv().ScriptVersion = "AutoChat v10.0 - Ultimate Systematic" 
+getgenv().ScriptVersion = "AutoChat v11.0 - Direct Flow" 
 
 -- ========================================== --
 -- VARIABEL & SERVICES
@@ -10,10 +10,11 @@ getgenv().ScriptVersion = "AutoChat v10.0 - Ultimate Systematic"
 getgenv().AutoChatEnabled = false
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
-local VirtualUser = game:GetService("VirtualUser")
+local TextChatService = game:GetService("TextChatService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- ========================================== --
--- FUNGSI UI UTILITY (Tampilan Menu)
+-- FUNGSI UI UTILITY
 -- ========================================== --
 local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
 
@@ -67,59 +68,52 @@ getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "Zon
 getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
 
 -- ========================================== --
--- LOGIKA SISTEMATIS (SEARCH & TYPE)
+-- LOGIKA UTAMA (DIRECT FLOW)
 -- ========================================== --
-local function SystematicChat(msg)
+local function DirectSend(msg)
+    -- Memastikan jendela chat terbuka (Bypass kedip)
     pcall(function()
-        -- Cari Chat Bar asli di PlayerGui secara mendalam
-        local chatBar = nil
-        for _, v in pairs(LP.PlayerGui:GetDescendants()) do
-            if v:IsA("TextBox") and (v.Name == "TextBox" or v.Name == "ChatBar") then
-                -- Memastikan ini benar-benar kotak input chat
-                if v.Visible and v.Parent.Name:lower():find("bar") or v.Parent.Name:lower():find("input") then
-                    chatBar = v
-                    break
+        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+            -- Paksa tampilkan window chat agar sistem tidak memblokir SendAsync
+            local gui = game:GetService("CoreGui"):FindFirstChild("ExperienceChat")
+            if gui then gui.Enabled = true end
+            
+            -- Kirim langsung ke semua channel yang tersedia
+            local channels = TextChatService:FindFirstChild("TextChannels")
+            if channels then
+                for _, v in pairs(channels:GetChildren()) do
+                    if v:IsA("TextChannel") then
+                        v:SendAsync(msg)
+                    end
                 end
             end
-        end
-
-        if chatBar then
-            -- Langkah 1: Fokuskan kamera/game agar input masuk
-            VirtualUser:ClickButton1(Vector2.new(0,0)) 
-            
-            -- Langkah 2: Paksa buka chat (Tombol '/')
-            VirtualUser:TypeKey(Enum.KeyCode.Slash)
-            task.wait(0.2)
-            
-            -- Langkah 3: Masukkan teks langsung ke properti UI
-            chatBar.Text = msg
-            task.wait(0.1)
-            
-            -- Langkah 4: Tekan Enter secara virtual melalui VirtualUser
-            VirtualUser:TypeKey(Enum.KeyCode.Return)
         else
-            -- Jika UI Chat tidak terdeteksi (Fallback ke Remote)
-            local SayMessageRequest = game:GetService("ReplicatedStorage"):FindFirstChild("SayMessageRequest", true)
-            if SayMessageRequest then
-                SayMessageRequest:FireServer(msg, "All")
+            -- Sistem Legacy
+            local event = ReplicatedStorage:FindFirstChild("SayMessageRequest", true)
+            if event then
+                event:FireServer(msg, "All")
             end
         end
+        
+        -- Fallback: Menampilkan bubble chat di atas karakter
+        LP:Chat(msg)
     end)
 end
 
 -- ========================================== --
--- LOOPING UTAMA
+-- LOOPING
 -- ========================================== --
 task.spawn(function()
     while true do
-        task.wait(1)
+        task.wait(0.1)
         if getgenv().AutoChatEnabled then
             local pesan = getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text or ""
             local rawDelay = tonumber(getgenv().DelayTextBoxInstance.Text) or 5
             
             if pesan ~= "" then
                 if rawDelay < 2 then rawDelay = 2 end
-                SystematicChat(pesan)
+                
+                DirectSend(pesan)
                 task.wait(rawDelay)
             end
         else
