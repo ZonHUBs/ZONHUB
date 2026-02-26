@@ -1,8 +1,8 @@
 -- [[ ZONHUB - AUTO CHAT MODULE (GHOST TYPE SMOOTH) ]] --
-local TargetPage = ... 
+local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-getgenv().ScriptVersion = "AutoChat v20.0 - Ghost Smooth" 
+getgenv().ScriptVersion = "AutoChat v20.1 - Ghost Smooth (All Chat Systems)"
 
 -- ========================================== --
 -- SERVICES
@@ -11,6 +11,8 @@ getgenv().AutoChatEnabled = false
 local VIM = game:GetService("VirtualInputManager")
 local UIS = game:GetService("UserInputService")
 local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LP = Players.LocalPlayer
 
 -- ========================================== --
@@ -18,7 +20,7 @@ local LP = Players.LocalPlayer
 -- ========================================== --
 local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
 
-local function CreateToggle(Parent, Text, Var) 
+local function CreateToggle(Parent, Text, Var)
     local Btn = Instance.new("TextButton", Parent)
     Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = ""; Btn.AutoButtonColor = false
     local C = Instance.new("UICorner", Btn); C.CornerRadius = UDim.new(0, 6)
@@ -30,20 +32,20 @@ local function CreateToggle(Parent, Text, Var)
     local Dot = Instance.new("Frame", IndBg)
     Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100)
     local DC = Instance.new("UICorner", Dot); DC.CornerRadius = UDim.new(1,0)
-    
-    Btn.MouseButton1Click:Connect(function() 
+
+    Btn.MouseButton1Click:Connect(function()
         getgenv()[Var] = not getgenv()[Var]
-        if getgenv()[Var] then 
+        if getgenv()[Var] then
             Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true)
-            Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple 
-        else 
+            Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple
+        else
             Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true)
-            Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) 
-        end 
-    end) 
+            Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30)
+        end
+    end)
 end
 
-local function CreateTextBox(Parent, Text, Default, IsNumber) 
+local function CreateTextBox(Parent, Text, Default, IsNumber)
     local Frame = Instance.new("Frame", Parent)
     Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35)
     local C = Instance.new("UICorner", Frame); C.CornerRadius = UDim.new(0, 6)
@@ -57,7 +59,7 @@ local function CreateTextBox(Parent, Text, Default, IsNumber)
             if not tonumber(InputBox.Text) then InputBox.Text = tostring(Default) end
         end)
     end
-    return InputBox 
+    return InputBox
 end
 
 -- ========================================== --
@@ -68,55 +70,110 @@ getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "Zon
 getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
 
 -- ========================================== --
--- LOGIKA GHOST TYPING (OPTIMIZED)
+-- GHOST TYPING (FIXED TIMING)
 -- ========================================== --
 local function GhostTypeSmooth(msg)
     pcall(function()
-        -- 1. Buka chat dengan Slash
         VIM:SendKeyEvent(true, Enum.KeyCode.Slash, false, game)
-        task.wait(0.05)
         VIM:SendKeyEvent(false, Enum.KeyCode.Slash, false, game)
-        
-        -- 2. Tunggu sebentar sampai TextBox fokus
-        local box = nil
-        local t = 0
-        while not box and t < 5 do
+
+        local box
+        local start = os.clock()
+        repeat
             box = UIS:GetFocusedTextBox()
             task.wait(0.05)
-            t = t + 1
-        end
+        until box or (os.clock() - start) > 5
 
         if box then
-            -- 3. Injeksi teks langsung (Anti-Interference)
-            -- Kita set teksnya secara paksa agar tombol jalan (WASD) tidak masuk
             box.Text = msg
-            task.wait(0.05)
-            
-            -- 4. Kirim dengan Enter
+            task.wait(0.03)
             VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-            task.wait(0.05)
             VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
         end
     end)
 end
 
 -- ========================================== --
--- LOOPING SISTEMATIS
+-- SMART SEND (WORKS ON TextChatService + Legacy)
 -- ========================================== --
+local function SendChatSmart(msg)
+    msg = tostring(msg or "")
+    if msg == "" then return false, "Pesan kosong" end
+
+    -- 1) TextChatService (chat baru)
+    do
+        local ok, sent, err = pcall(function()
+            if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+                local channel = nil
+
+                -- Target channel kalau sudah diset oleh input bar
+                if TextChatService.ChatInputBarConfiguration then
+                    channel = TextChatService.ChatInputBarConfiguration.TargetTextChannel
+                end
+
+                -- Fallback cari channel umum
+                if not channel then
+                    local channels = TextChatService:FindFirstChild("TextChannels") or TextChatService:WaitForChild("TextChannels", 2)
+                    if channels then
+                        channel = channels:FindFirstChild("RBXGeneral") or channels:FindFirstChildWhichIsA("TextChannel")
+                    end
+                end
+
+                if not channel then
+                    return false, "TextChannel tidak ketemu"
+                end
+
+                channel:SendAsync(msg)
+                return true
+            end
+
+            return nil -- bukan TextChatService
+        end)
+
+        if ok and sent ~= nil then
+            return sent, err
+        end
+    end
+
+    -- 2) Legacy chat (DefaultChatSystem)
+    do
+        local events = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+        local say = events and events:FindFirstChild("SayMessageRequest")
+        if say then
+            say:FireServer(msg, "All")
+            return true
+        end
+    end
+
+    -- 3) Fallback terakhir: ghost typing UI
+    GhostTypeSmooth(msg)
+    return true
+end
+
+-- ========================================== --
+-- LOOPING SISTEMATIS (anti dobel kirim)
+-- ========================================== --
+local _sending = false
+
 task.spawn(function()
     while true do
         task.wait(0.1)
-        if getgenv().AutoChatEnabled then
-            local pesan = getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text or ""
+
+        if getgenv().AutoChatEnabled and not _sending then
+            local pesan = (getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text) or ""
             local rawDelay = tonumber(getgenv().DelayTextBoxInstance.Text) or 5
-            
+            if rawDelay < 2 then rawDelay = 2 end
+
             if pesan ~= "" then
-                if rawDelay < 2 then rawDelay = 2 end -- Kecepatan maksimal yang aman
-                GhostTypeSmooth(pesan)
+                _sending = true
+                SendChatSmart(pesan)
                 task.wait(rawDelay)
+                _sending = false
+            else
+                task.wait(0.2)
             end
         else
-            task.wait(0.5)
+            task.wait(0.4)
         end
     end
 end)
