@@ -1,6 +1,6 @@
 -- [[ ZONHUB - INDEX LOADER V.0.60 (MODERNIZED UI) ]] --
 
-getgenv().HubVersion = "v0.60" 
+getgenv().HubVersion = "1.0.2" 
 
 local CoreGui = game:GetService("CoreGui")
 local UIS = game:GetService("UserInputService")
