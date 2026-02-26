@@ -1,8 +1,8 @@
--- [[ ZONHUB - AUTO CHAT MODULE (ALL ACCOUNTS & NON-VC SUPPORT) ]] --
+-- [[ ZONHUB - AUTO CHAT MODULE (FORCE ALL CHANNELS) ]] --
 local TargetPage = ... 
 if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-getgenv().ScriptVersion = "AutoChat v4.0 - Universal Bypass" 
+getgenv().ScriptVersion = "AutoChat v5.0 - Ultimate Engine" 
 
 -- ========================================== --
 -- VARIABEL GLOBAL 
@@ -97,26 +97,40 @@ getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "Zon
 getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
 
 -- ========================================== --
--- FUNGSI MENGIRIM PESAN (BRUTE-FORCE SEMUA JALUR)
+-- FUNGSI MENGIRIM PESAN (FORCE ALL CHANNELS)
 -- ========================================== --
-local function SendChatMessage(msg)
-    -- JALUR 1: Untuk Akun dengan Voice Chat & Game Sistem Baru
-    pcall(function()
-        TextChatService.TextChannels.RBXGeneral:SendAsync(msg)
-    end)
-
-    -- JALUR 2: Untuk Akun Biasa (Non-VC) & Anak-Anak
-    pcall(function()
-        ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(msg, "All")
-    end)
-
-    -- JALUR 3: Bypass jika developer game mengubah lokasi folder chat
-    pcall(function()
-        local remote = ReplicatedStorage:FindFirstChild("SayMessageRequest", true)
-        if remote then remote:FireServer(msg, "All") end
-    end)
-
-    -- JALUR 4: Fallback Universal (Memaksa memunculkan Bubble Chat di atas kepala)
+local function ForceSendChat(msg)
+    -- SISTEM BARU (TextChatService)
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        local success = false
+        pcall(function()
+            local rbxGeneral = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+            if rbxGeneral then
+                rbxGeneral:SendAsync(msg)
+                success = true
+            end
+        end)
+        
+        -- Jika gagal di RBXGeneral (biasa terjadi pada akun Non-VC / <13), 
+        -- kita paksa broadcast ke seluruh channel yang ada!
+        if not success then
+            pcall(function()
+                for _, channel in pairs(TextChatService:GetDescendants()) do
+                    if channel:IsA("TextChannel") then
+                        pcall(function() channel:SendAsync(msg) end)
+                    end
+                end
+            end)
+        end
+    
+    -- SISTEM LAMA (LegacyChatService)
+    else
+        pcall(function()
+            ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(msg, "All")
+        end)
+    end
+    
+    -- FALLBACK UNIVERSAL (Memunculkan chat di atas kepala karakter)
     pcall(function()
         Players:Chat(msg)
     end)
@@ -128,15 +142,15 @@ end
 task.spawn(function()
     while true do
         if getgenv().AutoChatEnabled then
-            -- Membaca langsung dari UI agar support semua keyboard Android/PC
+            -- Ambil teks terbaru langsung dari UI
             local pesan = getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text or "ZonHub On Top!"
             local rawDelay = getgenv().DelayTextBoxInstance and tonumber(getgenv().DelayTextBoxInstance.Text) or 5
             
-            -- Batas delay aman 3 detik agar tidak diblokir Anti-Spam Roblox
+            -- Cegah spam terlalu cepat yang membuat chat error/delay
             if rawDelay < 3 then rawDelay = 3 end 
             
             if pesan and pesan:match("%S") then 
-                SendChatMessage(pesan)
+                ForceSendChat(pesan)
                 task.wait(rawDelay)
             else
                 task.wait(1)
