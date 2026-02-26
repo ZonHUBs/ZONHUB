@@ -1,17 +1,17 @@
--- [[ ZONHUB - AUTO CHAT MODULE (GHOST TYPING) ]] --
+-- [[ ZONHUB - AUTO CHAT MODULE (FOCUS LOCK) ]] --
 local TargetPage = ... 
 if not TargetPage then warn("Module harus di-load dari ZonIndex!") return end
 
-getgenv().ScriptVersion = "AutoChat v17.0 - Ghost Type" 
+getgenv().ScriptVersion = "AutoChat v19.0 - Focus Lock" 
 
 -- ========================================== --
--- SERVICES
+-- SERVICES & VARIABLES
 -- ========================================== --
 getgenv().AutoChatEnabled = false
-local VIM = game:GetService("VirtualInputManager")
-local UIS = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
+local TextChatService = game:GetService("TextChatService")
+local VIM = game:GetService("VirtualInputManager")
 
 -- ========================================== --
 -- FUNGSI UI UTILITY
@@ -68,37 +68,34 @@ getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "Zon
 getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
 
 -- ========================================== --
--- LOGIKA GHOST TYPING (SISTEMATIS)
+-- LOGIKA FOCUS LOCK
 -- ========================================== --
-local function GhostType(msg)
+local function ForceChat(msg)
     pcall(function()
-        -- 1. Pastikan game dalam fokus sebelum mulai
-        VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-        task.wait(0.1)
-        VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        -- Cari ChatBar di PlayerGui
+        local chatBar = nil
+        for _, v in pairs(LP.PlayerGui:GetDescendants()) do
+            if v:IsA("TextBox") and (v.Name:lower():find("chat") or v.Name:lower():find("bar")) then
+                chatBar = v
+                break
+            end
+        end
 
-        -- 2. Tekan "/" untuk membuka chat
-        VIM:SendKeyEvent(true, Enum.KeyCode.Slash, false, game)
-        task.wait(0.2)
-        VIM:SendKeyEvent(false, Enum.KeyCode.Slash, false, game)
-        task.wait(0.5) -- Tunggu jendela chat benar-benar terbuka
-
-        -- 3. Cari TextBox Chat yang sedang fokus secara paksa
-        local box = UIS:GetFocusedTextBox()
-        if box then
-            -- Masukkan teks secara instan
-            box.Text = msg
-            task.wait(0.2)
+        if chatBar then
+            -- Langkah 1: Paksa Fokus ke Chat Bar
+            chatBar:CaptureFocus()
             
-            -- 4. Tekan Enter untuk mengirim
+            -- Langkah 2: Isi Teks secara instan (Menghapus input keyboard lain)
+            chatBar.Text = msg
+            task.wait(0.05)
+            
+            -- Langkah 3: Lepas Fokus dengan sinyal Enter (true)
+            chatBar:ReleaseFocus(true)
+            
+            -- Langkah 4: Tambahan Virtual Enter untuk memastikan terkirim
             VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-            task.wait(0.1)
+            task.wait(0.05)
             VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
-        else
-            -- Jika gagal fokus, coba klik posisi tengah atas (lokasi umum chat bar)
-            VIM:SendMouseButtonEvent(100, 100, 0, true, game, 0)
-            task.wait(0.1)
-            VIM:SendMouseButtonEvent(100, 100, 0, false, game, 0)
         end
     end)
 end
@@ -108,16 +105,18 @@ end
 -- ========================================== --
 task.spawn(function()
     while true do
-        task.wait(1)
+        task.wait(0.1)
         if getgenv().AutoChatEnabled then
             local pesan = getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text or ""
             local rawDelay = tonumber(getgenv().DelayTextBoxInstance.Text) or 5
             
             if pesan ~= "" then
-                if rawDelay < 3 then rawDelay = 3 end -- Delay aman agar tidak kedip terus
-                GhostType(pesan)
+                if rawDelay < 2 then rawDelay = 2 end
+                ForceChat(pesan)
                 task.wait(rawDelay)
             end
+        else
+            task.wait(0.5)
         end
     end
 end)
