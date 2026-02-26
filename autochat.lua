@@ -1,26 +1,44 @@
--- [[ ZONHUB - AUTO CHAT MODULE (GHOST TYPE SMOOTH + QUEUE BACKOFF) ]] --
+-- [[ ZONHUB - AUTO CHAT MODULE (UI MOUNT FIX + QUEUE/BACKOFF) ]] --
 local TargetPage = ...
 if not TargetPage then
     warn("[AutoChat] Module harus di-load dari ZonIndex! (TargetPage nil)")
     return
 end
 
-getgenv().ScriptVersion = "AutoChat v20.2 - UI Fix + Queue Backoff"
-getgenv().AutoChatEnabled = false
+local G = getgenv()
+G.ScriptVersion = "AutoChat v20.3 - UI Mount Fix + Queue Backoff"
 
--- ========================================== --
--- SERVICES
--- ========================================== --
-local VIM = game:GetService("VirtualInputManager")
-local UIS = game:GetService("UserInputService")
-local Players = game:GetService("Players")
-local TextChatService = game:GetService("TextChatService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LP = Players.LocalPlayer
+-- =========================================================
+-- GLOBAL STATE (biar kalau module di-load ulang, tidak dobel loop)
+-- =========================================================
+G.__ZONHUB_AUTOCHAT_STATE = G.__ZONHUB_AUTOCHAT_STATE or {}
+local State = G.__ZONHUB_AUTOCHAT_STATE
 
--- ========================================== --
--- SAFE WRAPPER (biar UI gak hilang karena error)
--- ========================================== --
+-- =========================================================
+-- SERVICES (hanya set sekali)
+-- =========================================================
+if not State._services then
+    State.VIM = game:GetService("VirtualInputManager")
+    State.UIS = game:GetService("UserInputService")
+    State.Players = game:GetService("Players")
+    State.TextChatService = game:GetService("TextChatService")
+    State.ReplicatedStorage = game:GetService("ReplicatedStorage")
+    State.LP = State.Players.LocalPlayer
+    State._services = true
+end
+
+-- default global var
+G.AutoChatEnabled = G.AutoChatEnabled or false
+
+-- =========================================================
+-- THEME + SAFE WRAPPER
+-- =========================================================
+local Theme = {
+    Item = Color3.fromRGB(45, 45, 45),
+    Text = Color3.fromRGB(255, 255, 255),
+    Purple = Color3.fromRGB(140, 80, 255)
+}
+
 local function safe(fn)
     local ok, err = xpcall(fn, function(e)
         return debug.traceback(e, 2)
@@ -30,14 +48,36 @@ local function safe(fn)
     end
 end
 
--- ========================================== --
--- FUNGSI UI UTILITY
--- ========================================== --
-local Theme = {
-    Item = Color3.fromRGB(45, 45, 45),
-    Text = Color3.fromRGB(255, 255, 255),
-    Purple = Color3.fromRGB(140, 80, 255)
-}
+-- =========================================================
+-- UI HELPERS
+-- =========================================================
+local function ResolveContainer(page)
+    -- kalau TargetPage bukan Instance, coba ambil field umum (jaga-jaga framework)
+    if typeof(page) ~= "Instance" then
+        if typeof(page) == "table" then
+            page = page.Content or page.Container or page.Page or page.Frame
+        end
+    end
+    if typeof(page) ~= "Instance" then
+        warn("[AutoChat] TargetPage bukan Instance, UI tidak bisa dibuat")
+        return nil
+    end
+
+    -- coba cari container umum
+    local content = page:FindFirstChild("Content", true)
+    if content and (content:IsA("Frame") or content:IsA("ScrollingFrame")) then
+        return content
+    end
+
+    local scroll = page:FindFirstChildWhichIsA("ScrollingFrame", true)
+    if scroll then return scroll end
+
+    if page:IsA("Frame") or page:IsA("ScrollingFrame") then
+        return page
+    end
+
+    return page
+end
 
 local function CreateToggle(Parent, Text, Var)
     local Btn = Instance.new("TextButton")
@@ -47,8 +87,7 @@ local function CreateToggle(Parent, Text, Var)
     Btn.Text = ""
     Btn.AutoButtonColor = false
 
-    local C = Instance.new("UICorner", Btn)
-    C.CornerRadius = UDim.new(0, 6)
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
 
     local T = Instance.new("TextLabel", Btn)
     T.Text = Text
@@ -64,28 +103,24 @@ local function CreateToggle(Parent, Text, Var)
     IndBg.Size = UDim2.new(0, 36, 0, 18)
     IndBg.Position = UDim2.new(1, -45, 0.5, -9)
     IndBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-
-    local IC = Instance.new("UICorner", IndBg)
-    IC.CornerRadius = UDim.new(1, 0)
+    Instance.new("UICorner", IndBg).CornerRadius = UDim.new(1, 0)
 
     local Dot = Instance.new("Frame", IndBg)
     Dot.Size = UDim2.new(0, 14, 0, 14)
     Dot.Position = UDim2.new(0, 2, 0.5, -7)
     Dot.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    Instance.new("UICorner", Dot).CornerRadius = UDim.new(1, 0)
 
-    local DC = Instance.new("UICorner", Dot)
-    DC.CornerRadius = UDim.new(1, 0)
-
-    -- sync initial state (biar dot sesuai getgenv)
-    if getgenv()[Var] then
+    -- sync initial state
+    if G[Var] then
         Dot.Position = UDim2.new(1, -16, 0.5, -7)
-        Dot.BackgroundColor3 = Color3.new(1,1,1)
+        Dot.BackgroundColor3 = Color3.new(1, 1, 1)
         IndBg.BackgroundColor3 = Theme.Purple
     end
 
     Btn.MouseButton1Click:Connect(function()
-        getgenv()[Var] = not getgenv()[Var]
-        if getgenv()[Var] then
+        G[Var] = not G[Var]
+        if G[Var] then
             Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true)
             Dot.BackgroundColor3 = Color3.new(1, 1, 1)
             IndBg.BackgroundColor3 = Theme.Purple
@@ -102,9 +137,7 @@ local function CreateTextBox(Parent, Text, Default, IsNumber)
     Frame.Parent = Parent
     Frame.BackgroundColor3 = Theme.Item
     Frame.Size = UDim2.new(1, -10, 0, 35)
-
-    local C = Instance.new("UICorner", Frame)
-    C.CornerRadius = UDim.new(0, 6)
+    Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
 
     local Label = Instance.new("TextLabel", Frame)
     Label.Text = Text
@@ -126,9 +159,7 @@ local function CreateTextBox(Parent, Text, Default, IsNumber)
     InputBox.Text = tostring(Default)
     InputBox.ClearTextOnFocus = false
     InputBox.TextXAlignment = Enum.TextXAlignment.Center
-
-    local IC = Instance.new("UICorner", InputBox)
-    IC.CornerRadius = UDim.new(0, 4)
+    Instance.new("UICorner", InputBox).CornerRadius = UDim.new(0, 4)
 
     if IsNumber then
         InputBox.FocusLost:Connect(function()
@@ -141,66 +172,40 @@ local function CreateTextBox(Parent, Text, Default, IsNumber)
     return InputBox
 end
 
--- ========================================== --
--- BUILD MENU (INI YANG HARUS MUNCUL)
--- ========================================== --
-safe(function()
-    CreateToggle(TargetPage, "Start Auto Chat", "AutoChatEnabled")
-    getgenv().ChatTextBoxInstance = CreateTextBox(TargetPage, "Isi Pesan Chat", "ZonHub On Top!", false)
-    getgenv().DelayTextBoxInstance = CreateTextBox(TargetPage, "Delay (Detik)", "5", true)
-end)
-
--- ========================================== --
--- GHOST TYPING (fallback terakhir)
--- ========================================== --
+-- =========================================================
+-- CHAT SENDERS
+-- =========================================================
 local function GhostTypeSmooth(msg)
     pcall(function()
-        VIM:SendKeyEvent(true, Enum.KeyCode.Slash, false, game)
-        VIM:SendKeyEvent(false, Enum.KeyCode.Slash, false, game)
+        State.VIM:SendKeyEvent(true, Enum.KeyCode.Slash, false, game)
+        State.VIM:SendKeyEvent(false, Enum.KeyCode.Slash, false, game)
 
         local box
         local start = os.clock()
         repeat
-            box = UIS:GetFocusedTextBox()
+            box = State.UIS:GetFocusedTextBox()
             task.wait(0.05)
         until box or (os.clock() - start) > 5
 
         if box then
             box.Text = msg
             task.wait(0.03)
-            VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-            VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+            State.VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+            State.VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
         end
     end)
-end
-
--- ========================================== --
--- SMART SEND (queue + backoff) agar gak macet di server rame
--- ========================================== --
-local ChatSender = {
-    Queue = {},
-    Sending = false,
-    MinDelay = 2,
-    MaxDelay = 25,
-    Backoff = 0,
-    LastSendAt = 0,
-    Debug = false, -- ubah true kalau mau lihat warn debug
-}
-
-local function dprint(...)
-    if ChatSender.Debug then warn("[AutoChat]", ...) end
 end
 
 local function WaitChatReady(timeout)
     local t0 = os.clock()
     while (os.clock() - t0) < (timeout or 8) do
-        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-            local channels = TextChatService:FindFirstChild("TextChannels")
+        if State.TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+            local channels = State.TextChatService:FindFirstChild("TextChannels")
             if channels and channels:FindFirstChildWhichIsA("TextChannel") then
                 return true
             end
         else
-            local events = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+            local events = State.ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
             if events and events:FindFirstChild("SayMessageRequest") then
                 return true
             end
@@ -211,19 +216,19 @@ local function WaitChatReady(timeout)
 end
 
 local function ResolveTextChannel()
-    if TextChatService.ChatVersion ~= Enum.ChatVersion.TextChatService then
+    if State.TextChatService.ChatVersion ~= Enum.ChatVersion.TextChatService then
         return nil
     end
 
     local channel = nil
     pcall(function()
-        if TextChatService.ChatInputBarConfiguration then
-            channel = TextChatService.ChatInputBarConfiguration.TargetTextChannel
+        if State.TextChatService.ChatInputBarConfiguration then
+            channel = State.TextChatService.ChatInputBarConfiguration.TargetTextChannel
         end
     end)
 
     if not channel then
-        local channels = TextChatService:FindFirstChild("TextChannels")
+        local channels = State.TextChatService:FindFirstChild("TextChannels")
         if channels then
             channel = channels:FindFirstChild("RBXGeneral") or channels:FindFirstChildWhichIsA("TextChannel")
         end
@@ -237,8 +242,8 @@ local function TrySendOnce(msg)
     if msg == "" then return false, "Pesan kosong" end
     if not WaitChatReady(6) then return false, "Chat belum ready" end
 
-    -- TextChatService
-    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+    -- 1) TextChatService
+    if State.TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
         local channel = ResolveTextChannel()
         if not channel then return false, "TextChannel tidak ketemu" end
 
@@ -248,23 +253,44 @@ local function TrySendOnce(msg)
         if ok then return true else return false, tostring(err) end
     end
 
-    -- Legacy
-    local events = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+    -- 2) Legacy
+    local events = State.ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
     local say = events and events:FindFirstChild("SayMessageRequest")
     if say then
         say:FireServer(msg, "All")
         return true
     end
 
-    -- UI fallback
+    -- 3) UI fallback
     GhostTypeSmooth(msg)
     return true
 end
 
+-- =========================================================
+-- QUEUE + BACKOFF (anti macet di world rame)
+-- =========================================================
+if not State.ChatSender then
+    State.ChatSender = {
+        Queue = {},
+        Sending = false,
+        MinDelay = 2,
+        MaxDelay = 25,
+        Backoff = 0,
+        LastSendAt = 0,
+        Debug = false, -- set true kalau mau lihat warn debug
+    }
+end
+
+local ChatSender = State.ChatSender
+
+local function dprint(...)
+    if ChatSender.Debug then warn("[AutoChat]", ...) end
+end
+
 function ChatSender:GetBaseDelay()
-    local rawDelay = tonumber(getgenv().DelayTextBoxInstance and getgenv().DelayTextBoxInstance.Text) or 5
-    if rawDelay < self.MinDelay then rawDelay = self.MinDelay end
-    return rawDelay
+    local raw = tonumber(G.DelayTextBoxInstance and G.DelayTextBoxInstance.Text) or 5
+    if raw < self.MinDelay then raw = self.MinDelay end
+    return raw
 end
 
 function ChatSender:IncreaseBackoff(reason)
@@ -288,7 +314,7 @@ end
 function ChatSender:Process()
     self.Sending = true
 
-    while getgenv().AutoChatEnabled do
+    while G.AutoChatEnabled do
         local msg = table.remove(self.Queue, 1)
         if not msg then break end
 
@@ -305,7 +331,7 @@ function ChatSender:Process()
             self:DecreaseBackoff()
         else
             self:IncreaseBackoff(reason)
-            table.insert(self.Queue, 1, msg) -- retry
+            table.insert(self.Queue, 1, msg) -- retry message yang sama
             task.wait(math.min(self.MaxDelay, 2 + self.Backoff))
         end
 
@@ -315,21 +341,98 @@ function ChatSender:Process()
     self.Sending = false
 end
 
--- ========================================== --
--- LOOP AUTOCHAT
--- ========================================== --
-task.spawn(function()
-    while true do
-        task.wait(0.25)
+-- =========================================================
+-- UI MOUNT (anti di-clear / anti tidak muncul)
+-- =========================================================
+State.UI_MOUNT_NAME = "ZonHub_AutoChatControls"
+State.CurrentPage = TargetPage
 
-        if getgenv().AutoChatEnabled then
-            local pesan = (getgenv().ChatTextBoxInstance and getgenv().ChatTextBoxInstance.Text) or ""
-            if pesan ~= "" then
-                ChatSender:Push(pesan)
-                task.wait(0.9) -- jangan push terlalu cepat ke queue
-            end
-        else
-            task.wait(0.6)
-        end
+function State:Mount(page)
+    self.CurrentPage = page
+    local container = ResolveContainer(page)
+    if not container or not container.Parent then
+        return false
     end
+
+    -- kalau sudah ada holder, jangan bikin dobel
+    if container:FindFirstChild(self.UI_MOUNT_NAME) then
+        return true
+    end
+
+    -- holder biar aman dari rebuild/clear internal
+    local Holder = Instance.new("Frame")
+    Holder.Name = self.UI_MOUNT_NAME
+    Holder.Parent = container
+    Holder.BackgroundTransparency = 1
+    Holder.Size = UDim2.new(1, 0, 0, 0)
+    Holder.AutomaticSize = Enum.AutomaticSize.Y
+
+    local List = Instance.new("UIListLayout", Holder)
+    List.SortOrder = Enum.SortOrder.LayoutOrder
+    List.Padding = UDim.new(0, 8)
+
+    local Pad = Instance.new("UIPadding", Holder)
+    Pad.PaddingTop = UDim.new(0, 8)
+    Pad.PaddingLeft = UDim.new(0, 5)
+    Pad.PaddingRight = UDim.new(0, 5)
+
+    -- build controls
+    CreateToggle(Holder, "Start Auto Chat", "AutoChatEnabled")
+    G.ChatTextBoxInstance = CreateTextBox(Holder, "Isi Pesan Chat", "ZonHub On Top!", false)
+    G.DelayTextBoxInstance = CreateTextBox(Holder, "Delay (Detik)", "5", true)
+
+    return true
+end
+
+-- mount cepat tapi aman (biar tidak kalah sama UI builder ZonHub)
+safe(function()
+    task.defer(function()
+        for i = 1, 40 do
+            if State:Mount(TargetPage) then break end
+            task.wait(0.1)
+        end
+    end)
 end)
+
+-- watchdog UI (kalau tab/page di-refresh, kontrol muncul lagi)
+if not State._ui_watchdog then
+    State._ui_watchdog = true
+    task.spawn(function()
+        while task.wait(1) do
+            local page = State.CurrentPage
+            if page then
+                local container = ResolveContainer(page)
+                if container and container.Parent then
+                    if not container:FindFirstChild(State.UI_MOUNT_NAME) then
+                        safe(function()
+                            State:Mount(page)
+                        end)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- =========================================================
+-- MAIN LOOP (tidak numpuk queue)
+-- =========================================================
+if not State._main_loop then
+    State._main_loop = true
+    task.spawn(function()
+        while task.wait(0.25) do
+            if G.AutoChatEnabled then
+                local pesan = (G.ChatTextBoxInstance and G.ChatTextBoxInstance.Text) or ""
+                if pesan ~= "" then
+                    -- biar tidak numpuk: push hanya kalau queue kosong
+                    if #ChatSender.Queue == 0 and not ChatSender.Sending then
+                        ChatSender:Push(pesan)
+                    elseif #ChatSender.Queue == 0 and ChatSender.Sending then
+                        -- sender lagi jalan tapi queue kosong (boleh push 1)
+                        ChatSender:Push(pesan)
+                    end
+                end
+            end
+        end
+    end)
+end
