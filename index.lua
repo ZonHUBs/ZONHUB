@@ -132,8 +132,7 @@ local function CreateAutoLoadTab(TabName, DescText, LoadLink)
             isLoaded = true 
             
             task.spawn(function()
-                -- game:HttpGet DIHAPUS, LoadLink sekarang berisi teks script dari bawah
-                local scriptCode = LoadLink
+                local scriptCode = game:HttpGet(LoadLink)
                 local func, compileErr = loadstring(scriptCode)
                 
                 if func then
@@ -148,7 +147,7 @@ local function CreateAutoLoadTab(TabName, DescText, LoadLink)
                         StatusLabel.TextColor3 = Color3.fromRGB(255, 85, 85)
                     end
                 else
-                    StatusLabel.Text = "❌ Gagal Load Script!"
+                    StatusLabel.Text = "❌ Gagal Load Link Raw!"
                     StatusLabel.TextColor3 = Color3.fromRGB(255, 85, 85)
                 end
             end)
@@ -157,26 +156,7 @@ local function CreateAutoLoadTab(TabName, DescText, LoadLink)
     table.insert(Tabs, TBtn); table.insert(Pages, Page); return Page, TBtn
 end
 
--- =======================================================
--- PASTE ISI SCRIPT LUA KAMU DI ANTARA TANDA [====[ DAN ]====]
--- =======================================================
-
-CreateAutoLoadTab("Pabrik", "Memuat otomatis sistem Pabrik.", [====[
--- https://raw.githubusercontent.com/Koziz/CAW-SCRIPT/refs/heads/main/Pabrik.lua
-
-]====])
-
-CreateAutoLoadTab("Auto Farm", "Sistem farming resource (Kayu, Batu).", [====[
--- https://raw.githubusercontent.com/Koziz/CAW-SCRIPT/refs/heads/main/Autofarm.lua
-
-]====]) 
-
-CreateAutoLoadTab("Manager", "Sistem Inventory & Sortir Barang.", [====[
--- https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/manager.lua
-
-]====])
-
-CreateAutoLoadTab("Auto Chat", "Auto Chat work if you unlock voice chat into your account", [====[
--- https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/autochat.lua
-
-]====])
+CreateAutoLoadTab("Pabrik", "Memuat otomatis sistem Pabrik.", "https://raw.githubusercontent.com/Koziz/CAW-SCRIPT/refs/heads/main/Pabrik.lua")
+CreateAutoLoadTab("Auto Farm", "Sistem farming resource (Kayu, Batu).", "https://raw.githubusercontent.com/Koziz/CAW-SCRIPT/refs/heads/main/Autofarm.lua") 
+CreateAutoLoadTab("Manager", "Sistem Inventory & Sortir Barang.", "https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/manager.lua")
+CreateAutoLoadTab("Auto Chat", "Auto Chat.", "https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/autochat.lua")
