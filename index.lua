@@ -1,6 +1,6 @@
 -- [[ ZONHUB - INDEX LOADER V.0.60 (MODERNIZED UI) ]] --
 
-getgenv().HubVersion = "1.0.3" 
+getgenv().HubVersion = "1.0.2 OOM EDITION" 
 
 local CoreGui = game:GetService("CoreGui")
 local UIS = game:GetService("UserInputService")
@@ -159,5 +159,5 @@ end
 CreateAutoLoadTab("Pabrik", "Memuat otomatis sistem Pabrik.", "https://raw.githubusercontent.com/Koziz/CAW-SCRIPT/refs/heads/main/Pabrik.lua")
 CreateAutoLoadTab("Auto Farm", "Sistem farming resource (Kayu, Batu).", "https://raw.githubusercontent.com/Koziz/CAW-SCRIPT/refs/heads/main/Autofarm.lua") 
 CreateAutoLoadTab("Manager", "Sistem Inventory & Sortir Barang.", "https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/manager.lua")
-CreateAutoLoadTab("Auto Clear", "Sistem Auto Clear, adjust speed below.", "https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/autoclear.lua")
 CreateAutoLoadTab("Auto Chat", "Auto Chat.", "https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/autochat.lua")
+CreateAutoLoadTab("Auto Clear", "Auto Chat.", "https://raw.githubusercontent.com/zikriadirahman-commits/ZONHUB/refs/heads/main/autoclear1.lua")
