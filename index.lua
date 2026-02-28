@@ -160,4 +160,4 @@ CreateAutoLoadTab("Pabrik", "Memuat otomatis sistem Pabrik.", "https://raw.githu
 CreateAutoLoadTab("Auto Farm", "Sistem farming resource (Kayu, Batu).", "https://raw.githubusercontent.com/Koziz/CAW-SCRIPT/refs/heads/main/Autofarm.lua") 
 CreateAutoLoadTab("Manager", "Sistem Inventory & Sortir Barang.", "https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/manager.lua")
 CreateAutoLoadTab("Auto Chat", "Auto Chat.", "https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/autochat.lua")
-CreateAutoLoadTab("Auto Clear", "Auto Chat.", "https://raw.githubusercontent.com/zikriadirahman-commits/ZONHUB/refs/heads/main/autoclear1.lua")
+CreateAutoLoadTab("Auto Clear", "Auto Clear, Adjust in Below.", "https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/autoclear.lua")
