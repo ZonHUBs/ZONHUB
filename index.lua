@@ -161,4 +161,3 @@ CreateAutoLoadTab("Auto Farm", "Sistem farming resource (Kayu, Batu).", "https:/
 CreateAutoLoadTab("Manager", "Sistem Inventory & Sortir Barang.", "https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/manager.lua")
 CreateAutoLoadTab("Auto Clear", "Sistem Auto Clear, adjust speed below.", "https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/autoclear.lua")
 CreateAutoLoadTab("Auto Chat", "Auto Chat.", "https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/autochat.lua")
-https://raw.githubusercontent.com/ZonHUBs/ZONHUB/refs/heads/main/autoclear.lua
